@@ -21,6 +21,10 @@ export type HookEventType =
   | 'user_prompt_submit'
   | 'notification'
   | 'pre_compact'
+  // Inter-agent communication events
+  | 'agent_message'
+  | 'agent_message_response'
+  | 'agent_broadcast'
 
 export type ToolName =
   | 'Read'
@@ -130,6 +134,165 @@ export interface PreCompactEvent extends BaseEvent {
 }
 
 // ============================================================================
+// Inter-Agent Communication Events
+// ============================================================================
+
+/** Priority levels for inter-agent messages */
+export type AgentMessagePriority = 'low' | 'normal' | 'high' | 'urgent'
+
+/** Message routing modes */
+export type AgentMessageRouting =
+  | 'direct'      // Send to specific agent by ID
+  | 'capability'  // Route to agent with matching capability
+  | 'broadcast'   // Send to all agents
+
+/** Agent capabilities for routing */
+export type AgentCapability =
+  | 'frontend'    // Frontend/UI expertise
+  | 'backend'     // Backend/API expertise
+  | 'database'    // Database expertise
+  | 'testing'     // Testing expertise
+  | 'devops'      // DevOps/infrastructure
+  | 'security'    // Security expertise
+  | 'general'     // General purpose
+  | string        // Custom capabilities
+
+/** Inter-agent message sent from one agent to another */
+export interface AgentMessageEvent extends BaseEvent {
+  type: 'agent_message'
+  /** ID of the sending agent/session */
+  fromAgentId: string
+  /** Name of the sending agent (for display) */
+  fromAgentName: string
+  /** Target agent ID (for direct routing) */
+  toAgentId?: string
+  /** Target capability (for capability-based routing) */
+  toCapability?: AgentCapability
+  /** Routing mode */
+  routing: AgentMessageRouting
+  /** The message content */
+  message: string
+  /** Optional context/data attached to message */
+  context?: Record<string, unknown>
+  /** Message priority */
+  priority: AgentMessagePriority
+  /** Unique message ID for tracking responses */
+  messageId: string
+  /** Whether a response is expected */
+  expectsResponse: boolean
+  /** Timeout for response in ms (default: 30000) */
+  responseTimeout?: number
+}
+
+/** Response to an inter-agent message */
+export interface AgentMessageResponseEvent extends BaseEvent {
+  type: 'agent_message_response'
+  /** ID of the responding agent */
+  fromAgentId: string
+  /** Name of the responding agent */
+  fromAgentName: string
+  /** ID of the original sender */
+  toAgentId: string
+  /** ID of the message being responded to */
+  inResponseTo: string
+  /** The response content */
+  response: string
+  /** Optional data attached to response */
+  data?: Record<string, unknown>
+  /** Whether the request was handled successfully */
+  success: boolean
+  /** Error message if success is false */
+  error?: string
+}
+
+/** Broadcast message to all agents */
+export interface AgentBroadcastEvent extends BaseEvent {
+  type: 'agent_broadcast'
+  /** ID of the broadcasting agent */
+  fromAgentId: string
+  /** Name of the broadcasting agent */
+  fromAgentName: string
+  /** Broadcast channel/topic */
+  channel: string
+  /** The broadcast message */
+  message: string
+  /** Optional data attached to broadcast */
+  data?: Record<string, unknown>
+}
+
+// ============================================================================
+// Agent Registry Types
+// ============================================================================
+
+/** Entry in the agent registry */
+export interface AgentRegistryEntry {
+  /** Session/agent ID */
+  agentId: string
+  /** Display name */
+  name: string
+  /** Agent capabilities */
+  capabilities: AgentCapability[]
+  /** Current status */
+  status: SessionStatus
+  /** Session backend type */
+  backend: SessionBackend
+  /** Working directory */
+  cwd?: string
+  /** Last activity timestamp */
+  lastActivity: number
+  /** Whether agent accepts messages */
+  acceptsMessages: boolean
+  /** Custom metadata */
+  metadata?: Record<string, unknown>
+}
+
+/** Request to register an agent */
+export interface AgentRegistrationRequest {
+  agentId: string
+  name: string
+  capabilities: AgentCapability[]
+  acceptsMessages?: boolean
+  metadata?: Record<string, unknown>
+}
+
+/** Request to send an inter-agent message */
+export interface SendAgentMessageRequest {
+  /** Target agent ID (for direct routing) */
+  toAgentId?: string
+  /** Target capability (for capability routing) */
+  toCapability?: AgentCapability
+  /** The message to send */
+  message: string
+  /** Optional context data */
+  context?: Record<string, unknown>
+  /** Priority level */
+  priority?: AgentMessagePriority
+  /** Whether to wait for response */
+  expectsResponse?: boolean
+  /** Response timeout in ms */
+  responseTimeout?: number
+}
+
+/** Response from send message endpoint */
+export interface SendAgentMessageResponse {
+  ok: boolean
+  /** ID of the sent message */
+  messageId?: string
+  /** ID of the target agent (after routing) */
+  targetAgentId?: string
+  /** Error message if failed */
+  error?: string
+  /** The actual response content (when expectsResponse=true and response received) */
+  response?: string
+  /** Additional response data */
+  responseData?: Record<string, unknown>
+  /** Whether the responding agent indicated success */
+  responseSuccess?: boolean
+  /** Timestamp when response was received */
+  responseReceivedAt?: number
+}
+
+// ============================================================================
 // Union Type
 // ============================================================================
 
@@ -143,6 +306,10 @@ export type ClaudeEvent =
   | UserPromptSubmitEvent
   | NotificationEvent
   | PreCompactEvent
+  // Inter-agent communication events
+  | AgentMessageEvent
+  | AgentMessageResponseEvent
+  | AgentBroadcastEvent
 
 // ============================================================================
 // WebSocket Messages
@@ -166,6 +333,11 @@ export type ServerMessage =
   | { type: 'permission_prompt'; payload: { sessionId: string; tool: string; context: string; options: PermissionOption[] } }
   | { type: 'permission_resolved'; payload: { sessionId: string } }
   | { type: 'text_tiles'; payload: TextTile[] }
+  // Inter-agent communication
+  | { type: 'agent_registry'; payload: AgentRegistryEntry[] }
+  | { type: 'agent_message'; payload: AgentMessageEvent }
+  | { type: 'agent_message_response'; payload: AgentMessageResponseEvent }
+  | { type: 'agent_broadcast'; payload: AgentBroadcastEvent }
 
 /** Client -> Server messages */
 export type ClientMessage =
@@ -175,6 +347,11 @@ export type ClientMessage =
   | { type: 'voice_start' }
   | { type: 'voice_stop' }
   | { type: 'permission_response'; payload: { sessionId: string; response: string } }
+  // Inter-agent communication
+  | { type: 'get_agent_registry' }
+  | { type: 'register_agent'; payload: AgentRegistrationRequest }
+  | { type: 'send_agent_message'; payload: SendAgentMessageRequest & { fromAgentId: string } }
+  | { type: 'agent_message_response'; payload: { messageId: string; response: string; success: boolean; error?: string } }
 
 // ============================================================================
 // Visualization State
@@ -263,14 +440,19 @@ export interface TaskToolInput {
 /** Status of a managed Claude session */
 export type SessionStatus = 'idle' | 'working' | 'waiting' | 'offline'
 
+/** Backend type for session execution */
+export type SessionBackend = 'tmux' | 'sdk'
+
 /** A managed Claude session */
 export interface ManagedSession {
   /** Our internal ID (UUID) */
   id: string
   /** User-friendly name ("Frontend", "Tests") */
   name: string
-  /** Actual tmux session name */
-  tmuxSession: string
+  /** Backend type: 'tmux' (CLI via tmux) or 'sdk' (Anthropic API) */
+  backend: SessionBackend
+  /** Actual tmux session name (only for tmux backend) */
+  tmuxSession?: string
   /** Current status */
   status: SessionStatus
   /** Claude Code session ID (from events, may differ from our ID) */
@@ -295,6 +477,16 @@ export interface ManagedSession {
     q: number
     r: number
   }
+
+  // SDK-specific fields
+  /** Internal SDK session ID for Vibecraft tracking (only for sdk backend) */
+  sdkSessionId?: string
+  /** Claude Agent SDK's actual session ID for resumption (only for sdk backend) */
+  sdkResumeId?: string
+  /** Model used for SDK session */
+  sdkModel?: 'sonnet' | 'opus' | 'haiku'
+  /** Running cost in USD (only for sdk backend) */
+  sdkCostUsd?: number
 }
 
 /** Git repository status */
@@ -347,16 +539,37 @@ export interface KnownProject {
   useCount: number
 }
 
+/** SDK permission mode options */
+export type SDKPermissionMode = 'default' | 'acceptEdits' | 'bypassPermissions'
+
+/** SDK session configuration options */
+export interface SDKSessionOptions {
+  /** Model to use (default: 'sonnet') */
+  model?: 'sonnet' | 'opus' | 'haiku'
+  /** Permission mode for tool use */
+  permissionMode?: SDKPermissionMode
+  /** Maximum budget in USD (optional) */
+  maxBudgetUsd?: number
+  /** Custom system prompt (optional) */
+  systemPrompt?: string
+  /** Session ID to resume (for restoring previous sessions) */
+  resume?: string
+}
+
 /** Request to create a new session */
 export interface CreateSessionRequest {
   name?: string
   cwd?: string
-  /** Claude command flags */
+  /** Backend type: 'tmux' (default) or 'sdk' */
+  backend?: SessionBackend
+  /** Claude command flags (for tmux backend) */
   flags?: {
     continue?: boolean        // -c (continue last conversation)
     skipPermissions?: boolean  // --dangerously-skip-permissions
     chrome?: boolean        // --chrome
   }
+  /** SDK options (for sdk backend) */
+  sdkOptions?: SDKSessionOptions
 }
 
 /** Request to update a session */

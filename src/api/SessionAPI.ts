@@ -5,12 +5,28 @@
  * UI logic and state updates are handled by the caller (main.ts).
  */
 
-import type { ManagedSession } from '../../shared/types'
+import type {
+  ManagedSession,
+  SessionBackend,
+  SDKSessionOptions,
+  AgentRegistryEntry,
+  AgentCapability,
+  AgentMessagePriority,
+  SendAgentMessageResponse,
+} from '../../shared/types'
 
 export interface SessionFlags {
   continue?: boolean
   skipPermissions?: boolean
   chrome?: boolean
+}
+
+export interface CreateSessionOptions {
+  name?: string
+  cwd?: string
+  backend?: SessionBackend
+  flags?: SessionFlags
+  sdkOptions?: SDKSessionOptions
 }
 
 export interface CreateSessionResponse {
@@ -39,15 +55,20 @@ export function createSessionAPI(apiUrl: string) {
      * Create a new managed session
      */
     async createSession(
-      name?: string,
+      options: CreateSessionOptions | string | undefined,
       cwd?: string,
       flags?: SessionFlags
     ): Promise<CreateSessionResponse> {
+      // Support both old signature (name, cwd, flags) and new signature (options object)
+      const requestBody = typeof options === 'object' && options !== null && !Array.isArray(options) && 'backend' in options
+        ? options
+        : { name: options as string | undefined, cwd, flags }
+
       try {
         const response = await fetch(`${apiUrl}/sessions`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, cwd, flags }),
+          body: JSON.stringify(requestBody),
         })
         return await response.json()
       } catch (e) {
@@ -182,6 +203,114 @@ export function createSessionAPI(apiUrl: string) {
         await fetch(`${apiUrl}/sessions/refresh`, { method: 'POST' })
       } catch (e) {
         console.error('Error refreshing sessions:', e)
+      }
+    },
+
+    // ========================================================================
+    // Inter-Agent Communication
+    // ========================================================================
+
+    /**
+     * Get all registered agents
+     */
+    async getAgents(): Promise<{ ok: boolean; agents?: AgentRegistryEntry[]; error?: string }> {
+      try {
+        const response = await fetch(`${apiUrl}/agents`)
+        return await response.json()
+      } catch (e) {
+        console.error('Error fetching agents:', e)
+        return { ok: false, error: 'Network error' }
+      }
+    },
+
+    /**
+     * Get agent registry stats
+     */
+    async getAgentStats(): Promise<{
+      ok: boolean
+      stats?: { total: number; online: number; byCapability: Record<string, number> }
+      error?: string
+    }> {
+      try {
+        const response = await fetch(`${apiUrl}/agents/stats`)
+        return await response.json()
+      } catch (e) {
+        console.error('Error fetching agent stats:', e)
+        return { ok: false, error: 'Network error' }
+      }
+    },
+
+    /**
+     * Send a message from one agent to another
+     */
+    async sendAgentMessage(
+      fromAgentId: string,
+      options: {
+        toAgentId?: string
+        toCapability?: AgentCapability
+        message: string
+        context?: Record<string, unknown>
+        priority?: AgentMessagePriority
+        expectsResponse?: boolean
+        responseTimeout?: number
+      }
+    ): Promise<SendAgentMessageResponse> {
+      try {
+        const response = await fetch(`${apiUrl}/agents/message`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fromAgentId, ...options }),
+        })
+        return await response.json()
+      } catch (e) {
+        console.error('Error sending agent message:', e)
+        return { ok: false, error: 'Network error' }
+      }
+    },
+
+    /**
+     * Broadcast a message to all agents
+     */
+    async broadcastAgentMessage(
+      fromAgentId: string,
+      channel: string,
+      message: string,
+      data?: Record<string, unknown>
+    ): Promise<SimpleResponse> {
+      try {
+        const response = await fetch(`${apiUrl}/agents/broadcast`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fromAgentId, channel, message, data }),
+        })
+        return await response.json()
+      } catch (e) {
+        console.error('Error broadcasting agent message:', e)
+        return { ok: false, error: 'Network error' }
+      }
+    },
+
+    /**
+     * Respond to an inter-agent message
+     */
+    async respondToAgentMessage(
+      fromAgentId: string,
+      messageId: string,
+      response: string,
+      success: boolean,
+      error?: string,
+      data?: Record<string, unknown>
+    ): Promise<SimpleResponse> {
+      try {
+        const res = await fetch(`${apiUrl}/agents/response`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fromAgentId, messageId, response, success, error, data }),
+        })
+        return await res.json()
+      } catch (e) {
+        console.error('Error responding to agent message:', e)
+        return { ok: false, error: 'Network error' }
       }
     },
   }

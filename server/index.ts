@@ -9,6 +9,9 @@
  * 5. Proxies voice input to Deepgram for transcription
  */
 
+// Load environment variables from .env file
+import 'dotenv/config'
+
 import { createServer, IncomingMessage, ServerResponse } from 'http'
 import { WebSocketServer, WebSocket, RawData } from 'ws'
 import { watch } from 'chokidar'
@@ -33,10 +36,20 @@ import type {
   TextTile,
   CreateTextTileRequest,
   UpdateTextTileRequest,
+  SessionBackend,
+  AgentMessageEvent,
+  AgentMessageResponseEvent,
+  AgentBroadcastEvent,
+  AgentRegistryEntry,
+  AgentRegistrationRequest,
+  SendAgentMessageRequest,
 } from '../shared/types.js'
 import { DEFAULTS } from '../shared/defaults.js'
 import { GitStatusManager } from './GitStatusManager.js'
 import { ProjectsManager } from './ProjectsManager.js'
+import { SDKSessionManager } from './SDKSessionManager.js'
+import { AgentRegistry } from './AgentRegistry.js'
+import { AgentMessageRouter } from './AgentMessageRouter.js'
 import { fileURLToPath } from 'url'
 
 // ============================================================================
@@ -307,6 +320,15 @@ const gitStatusManager = new GitStatusManager()
 /** Project directories manager */
 const projectsManager = new ProjectsManager()
 
+/** SDK session manager (initialized lazily in main()) */
+let sdkManager: SDKSessionManager | null = null
+
+/** Agent registry for inter-agent communication */
+const agentRegistry = new AgentRegistry({ log, debug })
+
+/** Agent message router (initialized lazily in main()) */
+let agentMessageRouter: AgentMessageRouter | null = null
+
 /** Active voice transcription sessions (WebSocket client → Deepgram connection) */
 const voiceSessions = new Map<WebSocket, LiveClient>()
 
@@ -448,7 +470,8 @@ function startTokenPolling(): void {
   // Poll every 2 seconds - poll all managed sessions
   setInterval(() => {
     for (const session of managedSessions.values()) {
-      if (session.status !== 'offline') {
+      // Only poll tmux sessions
+      if (session.status !== 'offline' && session.backend !== 'sdk' && session.tmuxSession) {
         pollTokens(session.tmuxSession)
       }
     }
@@ -693,7 +716,8 @@ function startPermissionPolling(): void {
   // Poll every 1 second (more frequent than tokens since permissions are time-sensitive)
   setInterval(() => {
     for (const session of managedSessions.values()) {
-      if (session.status !== 'offline') {
+      // Only poll tmux sessions
+      if (session.status !== 'offline' && session.backend !== 'sdk' && session.tmuxSession) {
         pollPermissions(session.id, session.tmuxSession)
       }
     }
@@ -712,6 +736,18 @@ function sendPermissionResponse(sessionId: string, optionNumber: string): boolea
     return false
   }
 
+  // SDK sessions don't use permission polling
+  if (session.backend === 'sdk') {
+    log(`Cannot send permission response to SDK session: ${sessionId}`)
+    return false
+  }
+
+  // Validate tmux session exists
+  if (!session.tmuxSession) {
+    log(`Cannot send permission response: no tmux session for ${sessionId}`)
+    return false
+  }
+
   // Validate it's a number
   if (!/^\d+$/.test(optionNumber)) {
     log(`Invalid permission response: ${optionNumber} (expected number)`)
@@ -726,8 +762,10 @@ function sendPermissionResponse(sessionId: string, optionNumber: string): boolea
     return false
   }
 
+  const tmuxSession = session.tmuxSession
+
   // Send the option number to tmux - Claude Code expects just the number
-  execFile('tmux', ['send-keys', '-t', session.tmuxSession, optionNumber], EXEC_OPTIONS, (error) => {
+  execFile('tmux', ['send-keys', '-t', tmuxSession, optionNumber], EXEC_OPTIONS, (error: Error | null) => {
     if (error) {
       log(`Failed to send permission response: ${error.message}`)
       return
@@ -761,7 +799,23 @@ function shortId(): string {
 /**
  * Create a new managed session
  */
-function createSession(options: CreateSessionRequest = {}): Promise<ManagedSession> {
+async function createSession(options: CreateSessionRequest = {}): Promise<ManagedSession> {
+  const backend: SessionBackend = options.backend ?? 'tmux'
+
+  log(`createSession called with backend: ${backend}, options: ${JSON.stringify(options)}`)
+
+  // Route to appropriate backend
+  if (backend === 'sdk') {
+    return createSDKSession(options)
+  } else {
+    return createTmuxSession(options)
+  }
+}
+
+/**
+ * Create a tmux-based session (original behavior)
+ */
+function createTmuxSession(options: CreateSessionRequest): Promise<ManagedSession> {
   return new Promise((resolve, reject) => {
     const id = randomUUID()
     sessionCounter++
@@ -815,6 +869,7 @@ function createSession(options: CreateSessionRequest = {}): Promise<ManagedSessi
       const session: ManagedSession = {
         id,
         name,
+        backend: 'tmux',
         tmuxSession,
         status: 'idle',
         createdAt: Date.now(),
@@ -824,6 +879,9 @@ function createSession(options: CreateSessionRequest = {}): Promise<ManagedSessi
 
       managedSessions.set(id, session)
       log(`Created session: ${name} (${id.slice(0, 8)}) -> tmux:${tmuxSession} cmd:'${claudeCmd}'`)
+
+      // Register as agent for inter-agent communication
+      registerSessionAsAgent(session)
 
       // Track git status for this session
       if (cwd) {
@@ -839,6 +897,77 @@ function createSession(options: CreateSessionRequest = {}): Promise<ManagedSessi
       resolve(session)
     })
   })
+}
+
+/**
+ * Create an SDK-based session
+ */
+async function createSDKSession(options: CreateSessionRequest): Promise<ManagedSession> {
+  if (!sdkManager || !sdkManager.isConfigured()) {
+    throw new Error('SDK mode not available: ANTHROPIC_API_KEY not configured')
+  }
+
+  const id = randomUUID()
+  sessionCounter++
+  const name = options.name || `Claude ${sessionCounter}`
+
+  // Validate cwd
+  let cwd: string
+  try {
+    cwd = validateDirectoryPath(options.cwd || process.cwd())
+  } catch (err) {
+    throw err
+  }
+
+  const sdkOptions = options.sdkOptions ?? {}
+
+  try {
+    // Create SDK session
+    const sdkSessionId = await sdkManager.createSession(id, sdkOptions, cwd)
+
+    // SDK sessions use a synthetic claudeSessionId for zone tracking
+    const claudeSessionId = `sdk-${id}`
+
+    const session: ManagedSession = {
+      id,
+      name,
+      backend: 'sdk',
+      status: 'idle',
+      createdAt: Date.now(),
+      lastActivity: Date.now(),
+      cwd,
+      sdkSessionId,
+      sdkModel: sdkOptions.model ?? 'sonnet',
+      sdkCostUsd: 0,
+      claudeSessionId,  // Required for zone creation in frontend
+    }
+
+    managedSessions.set(id, session)
+
+    // Link the SDK session ID to our managed session
+    claudeToManagedMap.set(claudeSessionId, id)
+
+    // Register as agent for inter-agent communication
+    registerSessionAsAgent(session)
+
+    log(`Created SDK session: ${name} (${id.slice(0, 8)}) model:${session.sdkModel} claudeSessionId:${claudeSessionId}`)
+
+    // Track git status
+    if (cwd) {
+      gitStatusManager.track(id, cwd)
+      projectsManager.addProject(cwd, name)
+    }
+
+    // Broadcast and persist
+    broadcastSessions()
+    saveSessions()
+
+    return session
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error)
+    log(`Failed to create SDK session: ${msg}`)
+    throw new Error(`Failed to create SDK session: ${msg}`)
+  }
 }
 
 /**
@@ -881,11 +1010,29 @@ function updateSession(id: string, updates: UpdateSessionRequest): ManagedSessio
 /**
  * Delete/kill a session
  */
-function deleteSession(id: string): Promise<boolean> {
+async function deleteSession(id: string): Promise<boolean> {
+  const session = managedSessions.get(id)
+  if (!session) {
+    return false
+  }
+
+  // Route based on backend
+  if (session.backend === 'sdk') {
+    return deleteSDKSession(id, session)
+  } else {
+    return deleteTmuxSession(id, session)
+  }
+}
+
+/**
+ * Delete tmux-based session
+ */
+function deleteTmuxSession(id: string, session: ManagedSession): Promise<boolean> {
   return new Promise((resolve) => {
-    const session = managedSessions.get(id)
-    if (!session) {
-      resolve(false)
+    if (!session.tmuxSession) {
+      // No tmux session to kill, just clean up
+      cleanupSession(id, session)
+      resolve(true)
       return
     }
 
@@ -903,21 +1050,49 @@ function deleteSession(id: string): Promise<boolean> {
         log(`Warning: Failed to kill tmux session: ${error.message}`)
       }
 
-      managedSessions.delete(id)
-      gitStatusManager.untrack(id)
-      // Clean up mapping
-      for (const [claudeId, managedId] of claudeToManagedMap) {
-        if (managedId === id) {
-          claudeToManagedMap.delete(claudeId)
-        }
-      }
-
-      log(`Deleted session: ${session.name} (${id.slice(0, 8)})`)
-      broadcastSessions()
-      saveSessions()
+      cleanupSession(id, session)
       resolve(true)
     })
   })
+}
+
+/**
+ * Delete SDK-based session
+ */
+async function deleteSDKSession(id: string, session: ManagedSession): Promise<boolean> {
+  try {
+    if (sdkManager) {
+      await sdkManager.stopSession(id)
+    }
+    cleanupSession(id, session)
+    return true
+  } catch (error) {
+    log(`Warning: Failed to stop SDK session: ${error}`)
+    cleanupSession(id, session)
+    return true
+  }
+}
+
+/**
+ * Clean up session state (shared by both backends)
+ */
+function cleanupSession(id: string, session: ManagedSession): void {
+  managedSessions.delete(id)
+  gitStatusManager.untrack(id)
+
+  // Unregister from agent registry
+  agentRegistry.unregister(id)
+
+  // Clean up mapping
+  for (const [claudeId, managedId] of claudeToManagedMap) {
+    if (managedId === id) {
+      claudeToManagedMap.delete(claudeId)
+    }
+  }
+
+  log(`Deleted session: ${session.name} (${id.slice(0, 8)})`)
+  broadcastSessions()
+  saveSessions()
 }
 
 /**
@@ -927,6 +1102,124 @@ async function sendPromptToSession(id: string, prompt: string): Promise<{ ok: bo
   const session = managedSessions.get(id)
   if (!session) {
     return { ok: false, error: 'Session not found' }
+  }
+
+  // Check if prompt mentions other agents or inter-agent communication
+  const enhancedPrompt = maybeEnhanceWithAgentContext(id, prompt)
+
+  // Route based on backend
+  if (session.backend === 'sdk') {
+    return sendPromptToSDKSession(id, session, enhancedPrompt)
+  } else {
+    return sendPromptToTmuxSession(session, enhancedPrompt)
+  }
+}
+
+/**
+ * Check if a prompt seems to involve inter-agent communication and enhance it with context
+ */
+function maybeEnhanceWithAgentContext(currentAgentId: string, prompt: string): string {
+  const promptLower = prompt.toLowerCase()
+
+  // Keywords that suggest inter-agent communication intent
+  const interAgentKeywords = [
+    'ask the', 'tell the', 'message the', 'send to',
+    'other agent', 'another agent', 'agent named',
+    'coordinate with', 'collaborate with', 'work with',
+    'check with', 'get from', 'request from',
+  ]
+
+  // Get all other agents
+  const otherAgents = agentRegistry.getAll().filter(a => a.agentId !== currentAgentId)
+
+  // Check if prompt mentions any agent by name - also find which one
+  const mentionedAgent = otherAgents.find(agent =>
+    promptLower.includes(agent.name.toLowerCase())
+  )
+
+  // Check if prompt uses inter-agent keywords
+  const usesKeywords = interAgentKeywords.some(kw => promptLower.includes(kw))
+
+  // If no inter-agent intent detected, return original
+  if (!mentionedAgent && !usesKeywords) {
+    return prompt
+  }
+
+  // If no other agents available, just return the prompt
+  if (otherAgents.length === 0) {
+    return prompt
+  }
+
+  // Build agent context with the mentioned agent highlighted
+  const agentContext = buildAgentContext(currentAgentId, otherAgents, mentionedAgent)
+
+  return `${agentContext}\n\n---\n\n${prompt}`
+}
+
+/**
+ * Build context about available agents and how to communicate with them
+ */
+function buildAgentContext(
+  currentAgentId: string,
+  otherAgents: AgentRegistryEntry[],
+  mentionedAgent?: AgentRegistryEntry
+): string {
+  const currentAgent = agentRegistry.get(currentAgentId)
+  const currentName = currentAgent?.name ?? 'Unknown'
+
+  const agentList = otherAgents.map(agent => {
+    const isTarget = mentionedAgent?.agentId === agent.agentId
+    const marker = isTarget ? '>>> ' : '  - '
+    const status = agent.status === 'offline' ? ' (OFFLINE)' : ''
+    const caps = agent.capabilities.filter(c => c !== 'general').join(', ')
+    const capStr = caps ? ` [${caps}]` : ''
+    const cwdStr = agent.cwd ? ` (${agent.cwd})` : ''
+    return `${marker}"${agent.name}"${capStr}${status}${cwdStr}\n    ID: ${agent.agentId}`
+  }).join('\n')
+
+  // Build quick-use example if a specific agent was mentioned
+  let quickExample = ''
+  if (mentionedAgent && mentionedAgent.status !== 'offline') {
+    quickExample = `
+QUICK ACTION - Send to "${mentionedAgent.name}":
+curl -X POST http://localhost:${PORT}/agents/message -H "Content-Type: application/json" -d '{"fromAgentId": "${currentAgentId}", "toAgentId": "${mentionedAgent.agentId}", "message": "YOUR_MESSAGE_HERE", "expectsResponse": true}'
+
+`
+  }
+
+  return `[VIBECRAFT AGENT NETWORK]
+You are "${currentName}" in a multi-agent Vibecraft workspace.
+
+AVAILABLE AGENTS:
+${agentList}
+
+${quickExample}HOW TO COMMUNICATE:
+Use the Bash tool to run curl commands to send messages:
+
+1. SEND TO SPECIFIC AGENT (replace YOUR_MESSAGE_HERE):
+   curl -X POST http://localhost:${PORT}/agents/message -H "Content-Type: application/json" -d '{"fromAgentId": "${currentAgentId}", "toAgentId": "AGENT_ID_HERE", "message": "YOUR_MESSAGE_HERE", "expectsResponse": true}'
+
+2. SEND BY CAPABILITY (routes to best available expert):
+   curl -X POST http://localhost:${PORT}/agents/message -H "Content-Type: application/json" -d '{"fromAgentId": "${currentAgentId}", "toCapability": "testing", "message": "YOUR_MESSAGE_HERE"}'
+
+   Available capabilities: frontend, backend, database, testing, devops, security, general
+
+3. BROADCAST TO ALL:
+   curl -X POST http://localhost:${PORT}/agents/broadcast -H "Content-Type: application/json" -d '{"fromAgentId": "${currentAgentId}", "channel": "general", "message": "YOUR_MESSAGE_HERE"}'
+
+IMPORTANT: Use the Bash tool to execute these curl commands. The other agent will receive your message and can respond.
+[END VIBECRAFT AGENT NETWORK]`
+}
+
+/**
+ * Send prompt to tmux-based session
+ */
+async function sendPromptToTmuxSession(
+  session: ManagedSession,
+  prompt: string
+): Promise<{ ok: boolean; error?: string }> {
+  if (!session.tmuxSession) {
+    return { ok: false, error: 'No tmux session configured' }
   }
 
   try {
@@ -942,25 +1235,90 @@ async function sendPromptToSession(id: string, prompt: string): Promise<{ ok: bo
 }
 
 /**
+ * Send prompt to SDK-based session
+ */
+async function sendPromptToSDKSession(
+  id: string,
+  session: ManagedSession,
+  prompt: string
+): Promise<{ ok: boolean; error?: string }> {
+  if (!sdkManager) {
+    return { ok: false, error: 'SDK manager not initialized' }
+  }
+
+  try {
+    session.status = 'working'
+    session.lastActivity = Date.now()
+    broadcastSessions()
+
+    // Send prompt asynchronously (don't wait for completion)
+    sdkManager.sendPrompt(id, prompt).then(() => {
+      // Update cost after prompt completes
+      session.sdkCostUsd = sdkManager?.getCost(id) ?? 0
+      session.status = 'idle'
+      session.lastActivity = Date.now()
+      broadcastSessions()
+      saveSessions()
+    }).catch((error) => {
+      log(`SDK prompt error for ${session.name}: ${error}`)
+      session.status = 'idle'
+      session.lastActivity = Date.now()
+      broadcastSessions()
+    })
+
+    log(`Prompt sent to SDK session ${session.name}: ${prompt.slice(0, 50)}...`)
+    return { ok: true }
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error)
+    log(`Failed to send prompt to SDK session ${session.name}: ${msg}`)
+    return { ok: false, error: msg }
+  }
+}
+
+/**
  * Check if tmux sessions are still alive and update status
  */
 function checkSessionHealth(): void {
   exec('tmux list-sessions -F "#{session_name}"', EXEC_OPTIONS, (error, stdout) => {
-    if (error) {
-      // tmux might not be running
-      for (const session of managedSessions.values()) {
-        if (session.status !== 'offline') {
-          session.status = 'offline'
-        }
-      }
-      return
-    }
-
-    const activeSessions = new Set(stdout.trim().split('\n'))
+    const activeTmuxSessions = error ? new Set<string>() : new Set(stdout.trim().split('\n'))
     let changed = false
 
     for (const session of managedSessions.values()) {
-      const isAlive = activeSessions.has(session.tmuxSession)
+      // SDK sessions: check if manager has them and they're not processing
+      if (session.backend === 'sdk') {
+        if (sdkManager && sdkManager.hasSession(session.id)) {
+          // SDK session is active - update cost
+          const cost = sdkManager.getCost(session.id)
+          if (cost !== session.sdkCostUsd) {
+            session.sdkCostUsd = cost
+            changed = true
+          }
+          // Check if processing
+          const isProcessing = sdkManager.isProcessing(session.id)
+          const newStatus = isProcessing ? 'working' : 'idle'
+          if (session.status === 'offline') {
+            // SDK session recovered
+            session.status = newStatus
+            changed = true
+          }
+        } else if (session.status !== 'offline') {
+          // SDK session lost
+          session.status = 'offline'
+          changed = true
+        }
+        continue
+      }
+
+      // tmux sessions: check tmux list
+      if (!session.tmuxSession) {
+        if (session.status !== 'offline') {
+          session.status = 'offline'
+          changed = true
+        }
+        continue
+      }
+
+      const isAlive = activeTmuxSessions.has(session.tmuxSession)
       const newStatus = isAlive ? (session.status === 'offline' ? 'idle' : session.status) : 'offline'
 
       if (session.status !== newStatus) {
@@ -1032,13 +1390,43 @@ function loadSessions(): void {
     const content = readFileSync(SESSIONS_FILE, 'utf-8')
     const data = JSON.parse(content)
 
+    let restoredSdkSessions = 0
+
     // Restore sessions
     if (Array.isArray(data.sessions)) {
       for (const session of data.sessions) {
-        // Mark all as offline initially - health check will update
-        session.status = 'offline'
         session.currentTool = undefined
-        managedSessions.set(session.id, session)
+
+        // Handle SDK sessions with valid resume ID differently
+        if (session.backend === 'sdk' && session.sdkResumeId && sdkManager?.isConfigured()) {
+          // SDK session with valid resume ID - can be restored
+          session.status = 'idle' // Mark as idle, not offline - ready to resume
+          managedSessions.set(session.id, session)
+
+          // Restore the in-memory SDK session state
+          sdkManager.restoreSession(
+            session.id,
+            session.sdkResumeId,
+            {
+              model: session.sdkModel,
+              permissionMode: 'bypassPermissions',
+            },
+            session.cwd ?? process.cwd(),
+            session.sdkCostUsd ?? 0
+          )
+          restoredSdkSessions++
+          log(`Restored SDK session: ${session.name} (resume ID: ${session.sdkResumeId.slice(0, 8)}...)`)
+        } else if (session.backend === 'sdk') {
+          // SDK session without resume ID - cannot be restored, mark as offline
+          session.status = 'offline'
+          managedSessions.set(session.id, session)
+          debug(`SDK session ${session.name} has no resume ID - marked offline`)
+        } else {
+          // tmux session - mark as offline initially, health check will update
+          session.status = 'offline'
+          managedSessions.set(session.id, session)
+        }
+
         // Track git status if session has a cwd
         if (session.cwd) {
           gitStatusManager.track(session.id, session.cwd)
@@ -1058,7 +1446,7 @@ function loadSessions(): void {
       sessionCounter = data.sessionCounter
     }
 
-    log(`Loaded ${managedSessions.size} sessions from ${SESSIONS_FILE}`)
+    log(`Loaded ${managedSessions.size} sessions from ${SESSIONS_FILE} (${restoredSdkSessions} SDK sessions restored)`)
   } catch (e) {
     console.error('Failed to load sessions:', e)
   }
@@ -1072,6 +1460,164 @@ function broadcastSessions(): void {
     type: 'sessions',
     payload: getSessions(),
   })
+
+  // Sync agent registry with current sessions
+  syncAgentRegistry()
+}
+
+/**
+ * Sync agent registry with current session states
+ */
+function syncAgentRegistry(): void {
+  for (const session of managedSessions.values()) {
+    agentRegistry.updateFromSession(session)
+  }
+}
+
+// ============================================================================
+// Inter-Agent Communication
+// ============================================================================
+
+/**
+ * Broadcast agent registry to all clients
+ */
+function broadcastAgentRegistry(registry: AgentRegistryEntry[]): void {
+  broadcast({
+    type: 'agent_registry',
+    payload: registry,
+  })
+}
+
+/**
+ * Broadcast agent event to all clients
+ */
+function broadcastAgentEvent(event: AgentMessageEvent | AgentMessageResponseEvent | AgentBroadcastEvent): void {
+  // Broadcast as a regular event for activity feed
+  broadcast({
+    type: 'event',
+    payload: event,
+  })
+}
+
+/**
+ * Deliver a message to an agent (session)
+ * For SDK sessions: injects as a prompt
+ * For tmux sessions: sends via tmux send-keys
+ */
+async function deliverAgentMessage(
+  agentId: string,
+  message: AgentMessageEvent | AgentBroadcastEvent
+): Promise<void> {
+  const session = managedSessions.get(agentId)
+  if (!session) {
+    throw new Error(`Session not found: ${agentId}`)
+  }
+
+  // Format the message as a prompt
+  const prompt = formatAgentMessageAsPrompt(message)
+
+  if (session.backend === 'sdk') {
+    // SDK session: send via SDK manager
+    if (!sdkManager) {
+      throw new Error('SDK manager not initialized')
+    }
+    await sdkManager.sendPrompt(agentId, prompt)
+  } else {
+    // tmux session: send via tmux
+    if (!session.tmuxSession) {
+      throw new Error(`tmux session not found for: ${agentId}`)
+    }
+    await sendPromptToTmux(session.tmuxSession, prompt)
+  }
+
+  debug(`Delivered message to ${session.name}: ${message.message.slice(0, 50)}...`)
+}
+
+/**
+ * Format an inter-agent message as a prompt
+ */
+function formatAgentMessageAsPrompt(message: AgentMessageEvent | AgentBroadcastEvent): string {
+  if (message.type === 'agent_broadcast') {
+    return `[VIBECRAFT BROADCAST]
+From: ${message.fromAgentName}
+Channel: ${message.channel}
+
+${message.message}${message.data ? `\n\nAttached data: ${JSON.stringify(message.data, null, 2)}` : ''}
+[END BROADCAST]`
+  }
+
+  const agentMsg = message as AgentMessageEvent
+
+  if (agentMsg.expectsResponse) {
+    // Get the receiving agent's ID for the response
+    const receivingAgentId = agentMsg.toAgentId ?? message.sessionId
+    return `[VIBECRAFT MESSAGE - RESPONSE REQUIRED]
+================================================================================
+From: ${agentMsg.fromAgentName} (ID: ${agentMsg.fromAgentId})
+To: You (ID: ${receivingAgentId})
+Message ID: ${agentMsg.messageId}
+================================================================================
+
+${agentMsg.message}${agentMsg.context ? `\n\nAttached context: ${JSON.stringify(agentMsg.context, null, 2)}` : ''}
+
+================================================================================
+ACTION REQUIRED: You MUST send your response using the Bash tool.
+
+After you have your answer, run this command (replace YOUR_RESPONSE with your actual response):
+
+curl -X POST http://localhost:${PORT}/agents/response \\
+  -H "Content-Type: application/json" \\
+  -d '{"fromAgentId": "${receivingAgentId}", "messageId": "${agentMsg.messageId}", "response": "YOUR_RESPONSE", "success": true}'
+
+IMPORTANT:
+- Do NOT just type your response - you MUST use the Bash tool to run the curl command above
+- Replace YOUR_RESPONSE with your actual response text (escape quotes with \\")
+- The sending agent is waiting for your response via this API call
+================================================================================
+[END MESSAGE]`
+  }
+
+  return `[VIBECRAFT MESSAGE]
+From: ${agentMsg.fromAgentName}
+
+${agentMsg.message}${agentMsg.context ? `\n\nAttached context: ${JSON.stringify(agentMsg.context, null, 2)}` : ''}
+[END MESSAGE]`
+}
+
+/**
+ * Send a prompt to a tmux session
+ */
+async function sendPromptToTmux(tmuxSession: string, prompt: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    // Escape special characters for shell
+    const escapedPrompt = prompt.replace(/'/g, "'\\''")
+
+    exec(
+      `tmux send-keys -t "${tmuxSession}" -l '${escapedPrompt}' && sleep 0.1 && tmux send-keys -t "${tmuxSession}" Enter`,
+      EXEC_OPTIONS,
+      (error) => {
+        if (error) {
+          reject(error)
+        } else {
+          resolve()
+        }
+      }
+    )
+  })
+}
+
+/**
+ * Register a session as an agent in the registry
+ */
+function registerSessionAsAgent(session: ManagedSession): void {
+  agentRegistry.registerFromSession(session)
+}
+
+/**
+ * Update agent status when session status changes
+ */
+function updateAgentStatus(sessionId: string, status: ManagedSession['status']): void {
+  agentRegistry.updateStatus(sessionId, status)
 }
 
 // ============================================================================
@@ -1463,6 +2009,54 @@ function handleClientMessage(ws: WebSocket, message: ClientMessage) {
       break
     }
 
+    // Inter-agent communication
+    case 'get_agent_registry': {
+      const registryMsg: ServerMessage = {
+        type: 'agent_registry',
+        payload: agentRegistry.getAll(),
+      }
+      ws.send(JSON.stringify(registryMsg))
+      debug('Sent agent registry')
+      break
+    }
+
+    case 'register_agent': {
+      const registration = message.payload as AgentRegistrationRequest
+      const session = managedSessions.get(registration.agentId)
+      if (session) {
+        agentRegistry.register(registration, session)
+        debug(`Registered agent: ${registration.name}`)
+      } else {
+        debug(`Cannot register agent: session not found ${registration.agentId}`)
+      }
+      break
+    }
+
+    case 'send_agent_message': {
+      const { fromAgentId, ...request } = message.payload as SendAgentMessageRequest & { fromAgentId: string }
+      if (!agentMessageRouter) {
+        debug('Agent message router not initialized')
+        break
+      }
+      agentMessageRouter.sendMessage(fromAgentId, request).then((result) => {
+        debug(`Message sent: ${result.ok ? 'success' : result.error}`)
+      })
+      break
+    }
+
+    case 'agent_message_response': {
+      const { messageId, response, success, error } = message.payload as {
+        messageId: string
+        response: string
+        success: boolean
+        error?: string
+      }
+      // Need to find the fromAgentId - this should come from the client
+      // For now, we'll handle this via HTTP API for proper tracking
+      debug(`Agent response received for message: ${messageId}`)
+      break
+    }
+
     default:
       debug(`Unknown message type: ${(message as { type: string }).type}`)
   }
@@ -1752,6 +2346,142 @@ function handleHttpRequest(req: IncomingMessage, res: ServerResponse) {
   }
 
   // ============================================================================
+  // Inter-Agent Communication API
+  // ============================================================================
+
+  // Get agent registry
+  if (req.method === 'GET' && req.url === '/agents') {
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({ ok: true, agents: agentRegistry.getAll() }))
+    return
+  }
+
+  // Get agent registry stats
+  if (req.method === 'GET' && req.url === '/agents/stats') {
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({ ok: true, stats: agentRegistry.getStats() }))
+    return
+  }
+
+  // Send a message to an agent
+  if (req.method === 'POST' && req.url === '/agents/message') {
+    collectRequestBody(req).then(async body => {
+      try {
+        const { fromAgentId, ...request } = JSON.parse(body) as SendAgentMessageRequest & { fromAgentId: string }
+
+        if (!fromAgentId) {
+          res.writeHead(400, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ ok: false, error: 'fromAgentId is required' }))
+          return
+        }
+
+        if (!agentMessageRouter) {
+          res.writeHead(500, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ ok: false, error: 'Message router not initialized' }))
+          return
+        }
+
+        const result = await agentMessageRouter.sendMessage(fromAgentId, request)
+        res.writeHead(result.ok ? 200 : 400, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify(result))
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ok: false, error: (e as Error).message }))
+      }
+    }).catch(() => {
+      res.writeHead(413, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: 'Request body too large' }))
+    })
+    return
+  }
+
+  // Broadcast a message to all agents
+  if (req.method === 'POST' && req.url === '/agents/broadcast') {
+    collectRequestBody(req).then(async body => {
+      try {
+        const { fromAgentId, channel, message, data } = JSON.parse(body) as {
+          fromAgentId: string
+          channel: string
+          message: string
+          data?: Record<string, unknown>
+        }
+
+        if (!fromAgentId || !channel || !message) {
+          res.writeHead(400, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ ok: false, error: 'fromAgentId, channel, and message are required' }))
+          return
+        }
+
+        if (!agentMessageRouter) {
+          res.writeHead(500, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ ok: false, error: 'Message router not initialized' }))
+          return
+        }
+
+        await agentMessageRouter.broadcast(fromAgentId, channel, message, data)
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ok: true }))
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ok: false, error: (e as Error).message }))
+      }
+    }).catch(() => {
+      res.writeHead(413, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: 'Request body too large' }))
+    })
+    return
+  }
+
+  // Respond to a message
+  if (req.method === 'POST' && req.url === '/agents/response') {
+    collectRequestBody(req).then(async body => {
+      try {
+        const { fromAgentId, messageId, response, success, error, data } = JSON.parse(body) as {
+          fromAgentId: string
+          messageId: string
+          response: string
+          success: boolean
+          error?: string
+          data?: Record<string, unknown>
+        }
+
+        if (!fromAgentId || !messageId) {
+          res.writeHead(400, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ ok: false, error: 'fromAgentId and messageId are required' }))
+          return
+        }
+
+        if (!agentMessageRouter) {
+          res.writeHead(500, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ ok: false, error: 'Message router not initialized' }))
+          return
+        }
+
+        // handleResponse now returns delivery status
+        const result = await agentMessageRouter.handleResponse(fromAgentId, messageId, response, success, error, data)
+
+        if (result.delivered) {
+          log(`Response delivered for message ${messageId.slice(0, 8)} from ${fromAgentId.slice(0, 8)}`)
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ ok: true, delivered: true }))
+        } else {
+          // Response was processed but delivery to original sender failed
+          log(`Response processed but delivery failed for message ${messageId.slice(0, 8)}: ${result.error}`)
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ ok: true, delivered: false, warning: result.error }))
+        }
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ok: false, error: (e as Error).message }))
+      }
+    }).catch(() => {
+      res.writeHead(413, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: 'Request body too large' }))
+    })
+    return
+  }
+
+  // ============================================================================
   // Projects API (known directories for autocomplete)
   // ============================================================================
 
@@ -1862,12 +2592,41 @@ function handleHttpRequest(req: IncomingMessage, res: ServerResponse) {
       return
     }
 
-    // POST /sessions/:id/cancel - Send Ctrl+C to specific session
+    // POST /sessions/:id/cancel - Cancel/interrupt a session
     if (req.method === 'POST' && action === 'cancel') {
       const session = getSession(sessionId)
       if (!session) {
         res.writeHead(404, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify({ ok: false, error: 'Session not found' }))
+        return
+      }
+
+      // Route based on backend
+      if (session.backend === 'sdk') {
+        // SDK: interrupt via SDK manager
+        if (sdkManager) {
+          sdkManager.interrupt(sessionId).then(() => {
+            log(`Interrupted SDK session ${session.name}`)
+            session.status = 'idle'
+            session.currentTool = undefined
+            broadcastSessions()
+            res.writeHead(200, { 'Content-Type': 'application/json' })
+            res.end(JSON.stringify({ ok: true }))
+          }).catch((error) => {
+            res.writeHead(200, { 'Content-Type': 'application/json' })
+            res.end(JSON.stringify({ ok: false, error: String(error) }))
+          })
+        } else {
+          res.writeHead(500, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ ok: false, error: 'SDK manager not available' }))
+        }
+        return
+      }
+
+      // tmux: Send Ctrl+C
+      if (!session.tmuxSession) {
+        res.writeHead(400, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ok: false, error: 'No tmux session configured' }))
         return
       }
 
@@ -1923,7 +2682,7 @@ function handleHttpRequest(req: IncomingMessage, res: ServerResponse) {
       return
     }
 
-    // POST /sessions/:id/restart - Restart an offline session
+    // POST /sessions/:id/restart - Restart an offline session (or resume an SDK session)
     if (req.method === 'POST' && action === 'restart') {
       const session = getSession(sessionId)
       if (!session) {
@@ -1932,9 +2691,60 @@ function handleHttpRequest(req: IncomingMessage, res: ServerResponse) {
         return
       }
 
+      // Handle SDK session resumption
+      if (session.backend === 'sdk') {
+        // Check if session has a valid resume ID
+        if (!session.sdkResumeId) {
+          res.writeHead(400, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ ok: false, error: 'SDK session has no resume data and cannot be restored' }))
+          return
+        }
+
+        // Check if SDK manager is available
+        if (!sdkManager || !sdkManager.isConfigured()) {
+          res.writeHead(400, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ ok: false, error: 'SDK mode not available (ANTHROPIC_API_KEY not set)' }))
+          return
+        }
+
+        // Restore the SDK session
+        sdkManager.restoreSession(
+          session.id,
+          session.sdkResumeId,
+          {
+            model: session.sdkModel,
+            permissionMode: 'bypassPermissions',
+          },
+          session.cwd ?? process.cwd(),
+          session.sdkCostUsd ?? 0
+        )
+
+        // Update session state
+        session.status = 'idle'
+        session.lastActivity = Date.now()
+        session.currentTool = undefined
+
+        log(`Resumed SDK session: ${session.name} (resume ID: ${session.sdkResumeId.slice(0, 8)}...)`)
+        broadcastSessions()
+        saveSessions()
+
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ok: true }))
+        return
+      }
+
+      // Check for tmux session
+      if (!session.tmuxSession) {
+        res.writeHead(400, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ok: false, error: 'No tmux session to restart' }))
+        return
+      }
+
+      const tmuxSession = session.tmuxSession
+
       // Validate inputs to prevent command injection
       try {
-        validateTmuxSession(session.tmuxSession)
+        validateTmuxSession(tmuxSession)
       } catch {
         res.writeHead(400, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify({ ok: false, error: 'Invalid tmux session name' }))
@@ -1951,12 +2761,12 @@ function handleHttpRequest(req: IncomingMessage, res: ServerResponse) {
       }
 
       // Kill existing tmux session if it exists (ignore errors)
-      execFile('tmux', ['kill-session', '-t', session.tmuxSession], EXEC_OPTIONS, () => {
+      execFile('tmux', ['kill-session', '-t', tmuxSession], EXEC_OPTIONS, () => {
         // Respawn tmux session with claude using execFile
         execFile('tmux', [
           'new-session',
           '-d',
-          '-s', session.tmuxSession,
+          '-s', tmuxSession,
           '-c', cwd,
           `PATH=${EXEC_PATH} claude -c --permission-mode=bypassPermissions --dangerously-skip-permissions`
         ], EXEC_OPTIONS, (error) => {
@@ -2210,6 +3020,40 @@ function serveStaticFile(req: IncomingMessage, res: ServerResponse): void {
 
 function main() {
   log('Starting Vibecraft server...')
+
+  // Initialize SDK session manager
+  sdkManager = new SDKSessionManager(addEvent, { log, debug })
+  if (sdkManager.isConfigured()) {
+    log('SDK mode enabled (ANTHROPIC_API_KEY configured)')
+  } else {
+    log('SDK mode disabled (ANTHROPIC_API_KEY not set)')
+  }
+
+  // Set up callback for SDK session ID updates (for persistence)
+  sdkManager.setSessionIdUpdateCallback((managedId, sdkResumeId) => {
+    const session = managedSessions.get(managedId)
+    if (session) {
+      session.sdkResumeId = sdkResumeId
+      log(`Persisting SDK resume ID for session ${session.name}: ${sdkResumeId}`)
+      saveSessions()
+      broadcastSessions()
+    }
+  })
+
+  // Initialize agent message router for inter-agent communication
+  agentMessageRouter = new AgentMessageRouter(
+    agentRegistry,
+    deliverAgentMessage,
+    broadcastAgentEvent,
+    { log, debug }
+  )
+
+  // Subscribe to registry changes to broadcast to clients
+  agentRegistry.onChange((registry) => {
+    broadcastAgentRegistry(registry)
+  })
+
+  log('Inter-agent communication enabled')
 
   // Load Deepgram API key for voice transcription
   deepgramApiKey = loadDeepgramKey()

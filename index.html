@@ -181,7 +181,19 @@
         </div>
 
         <div class="modal-field">
-          <label>Options</label>
+          <label>Mode</label>
+          <div class="modal-checkboxes">
+            <label class="modal-checkbox">
+              <input type="checkbox" id="session-opt-sdk-mode" />
+              <span class="checkbox-label">SDK Mode <span class="sdk-badge">API</span></span>
+            </label>
+          </div>
+          <div class="field-hint" id="sdk-mode-hint">Use Anthropic API directly (requires ANTHROPIC_API_KEY)</div>
+        </div>
+
+        <!-- tmux options (hidden when SDK mode enabled) -->
+        <div class="modal-field" id="tmux-options">
+          <label>CLI Options</label>
           <div class="modal-checkboxes">
             <label class="modal-checkbox">
               <input type="checkbox" id="session-opt-continue" />
@@ -195,6 +207,27 @@
               <input type="checkbox" id="session-opt-chrome" />
               <span class="checkbox-label">Chrome <code>--chrome</code></span>
             </label>
+          </div>
+        </div>
+
+        <!-- SDK options (shown when SDK mode enabled) -->
+        <div class="modal-field hidden" id="sdk-options">
+          <label>SDK Options</label>
+          <div class="modal-select-row">
+            <label for="session-sdk-model">Model</label>
+            <select id="session-sdk-model">
+              <option value="sonnet" selected>Sonnet (default)</option>
+              <option value="opus">Opus</option>
+              <option value="haiku">Haiku</option>
+            </select>
+          </div>
+          <div class="modal-select-row">
+            <label for="session-sdk-permission">Permission Mode</label>
+            <select id="session-sdk-permission">
+              <option value="bypassPermissions" selected>Bypass Permissions</option>
+              <option value="acceptEdits">Accept Edits</option>
+              <option value="default">Default (ask)</option>
+            </select>
           </div>
         </div>
 

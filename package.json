@@ -43,8 +43,10 @@
     "release": "./scripts/release.sh"
   },
   "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.2.12",
     "@deepgram/sdk": "^4.11.3",
     "chokidar": "^4.0.0",
+    "dotenv": "^17.2.3",
     "three": "^0.170.0",
     "tone": "^15.1.22",
     "ws": "^8.18.0"

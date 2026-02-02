@@ -427,6 +427,50 @@ TOOL_STATION_MAP = {
 - Disable shadows entirely with `renderer.shadowMap.enabled = false`
 - Reduce station geometry complexity
 
+## SDK Mode
+
+Vibecraft supports two session backends:
+
+### tmux Mode (Default)
+- Requires Claude Code CLI subscription
+- Runs Claude Code in a tmux session
+- Events captured via bash hook
+- Sessions persist across server restarts (tmux persists)
+- Supports all CLI features: `-c`, `--chrome`, `--dangerously-skip-permissions`
+
+### SDK Mode
+- Requires `ANTHROPIC_API_KEY` environment variable
+- Runs Claude sessions via the Claude Agent SDK
+- Events captured via SDK hooks (direct callback)
+- Sessions are ephemeral (lost on server restart)
+- Supports model selection: Sonnet, Opus, Haiku
+- Tracks API cost in real-time
+
+### SDK Session Creation
+
+1. In the New Zone modal, check "SDK Mode"
+2. Select model (Sonnet/Opus/Haiku) and permission mode
+3. Click Create
+
+### SDK vs tmux Feature Comparison
+
+| Feature | tmux Mode | SDK Mode |
+|---------|-----------|----------|
+| Authentication | Claude Code subscription | Anthropic API key |
+| Tool events | Hook script | SDK hooks |
+| Prompt submission | tmux send-keys | query() call |
+| Cancellation | Ctrl+C via tmux | query.interrupt() |
+| Cost tracking | No | Yes |
+| Survives server restart | Yes | No |
+| Chrome automation | --chrome flag | Not available |
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `server/SDKSessionManager.ts` | SDK session lifecycle and hooks |
+| `shared/types.ts` | `SessionBackend`, `SDKSessionOptions` types |
+
 ## Configuration
 
 ### Central Defaults
@@ -490,6 +534,7 @@ Environment variables override the defaults:
 | `VIBECRAFT_SESSIONS_FILE` | ~/.vibecraft/data/sessions.json | Session persistence file |
 | `VIBECRAFT_DATA_DIR` | ~/.vibecraft/data | Hook data directory |
 | `DEEPGRAM_API_KEY` | (none) | Deepgram API key for voice input |
+| `ANTHROPIC_API_KEY` | (none) | Anthropic API key for SDK sessions |
 
 A `.env` file is included with defaults - just run `npm run dev`.
 
@@ -577,6 +622,7 @@ Client rebuilds its local `claudeToManagedLink` map from server data on every `s
 - **EventBus architecture**: Decoupled event handling with 6 focused handler modules
 - **Extracted modals**: QuestionModal and PermissionModal as separate UI modules
 - **Draw mode**: Hex painting with 6 colors, brush sizes, 3D stacking, and eraser
+- **SDK Mode**: Alternative backend using Anthropic API instead of Claude Code CLI
 - **Zone elevation**: Painted hexes can stack in 3D when same color is painted repeatedly
 - **Solid zone sides**: Raised zones show colored side faces, not just edge lines
 - **Text label modal**: Custom themed textarea replaces browser prompt() for tile labels
@@ -591,6 +637,116 @@ Client rebuilds its local `claudeToManagedLink` map from server data on every `s
 - **Station panels**: Toggle with P key to see recent tool history per workstation (last 3 items)
 - **Station glow pulse**: Brief ring highlight when tools use stations
 - **Zone Command modal**: Right-click zone → C for quick prompt input positioned near the 3D zone
+- **Inter-agent communication**: Agents can send messages to each other via direct addressing or capability-based routing
+
+## Inter-Agent Communication
+
+Agents (sessions) can communicate with each other using the inter-agent messaging system.
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      Agent Registry                          │
+│  Tracks agents, capabilities, and status                    │
+└─────────────────────────────────────────────────────────────┘
+                           ↓
+┌─────────────────────────────────────────────────────────────┐
+│                    Agent Message Router                      │
+│  Routes messages via direct ID or capability-based routing  │
+└─────────────────────────────────────────────────────────────┘
+                           ↓
+┌──────────────────┬──────────────────┬───────────────────────┐
+│   SDK Sessions   │   tmux Sessions  │   Broadcast Channel   │
+│   (API prompts)  │ (tmux send-keys) │   (all agents)        │
+└──────────────────┴──────────────────┴───────────────────────┘
+```
+
+### Agent Capabilities
+
+Agents are auto-registered with capabilities inferred from their name:
+- `frontend` - Frontend/UI expertise (names containing "frontend", "ui", "react", "vue")
+- `backend` - Backend/API expertise (names containing "backend", "api", "server")
+- `database` - Database expertise (names containing "database", "db", "sql")
+- `testing` - Testing expertise (names containing "test", "spec", "e2e")
+- `devops` - DevOps/infrastructure (names containing "devops", "deploy", "docker")
+- `security` - Security expertise (names containing "security", "auth")
+- `general` - All agents have this capability
+
+### API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/agents` | GET | Get all registered agents |
+| `/agents/stats` | GET | Get agent registry stats |
+| `/agents/message` | POST | Send a message to an agent |
+| `/agents/broadcast` | POST | Broadcast a message to all agents |
+| `/agents/response` | POST | Respond to a message |
+
+### Message Routing
+
+**Direct routing:** Send to a specific agent by ID
+```json
+{
+  "fromAgentId": "abc-123",
+  "toAgentId": "def-456",
+  "message": "Please review this code"
+}
+```
+
+**Capability-based routing:** Route to the best available agent with a capability
+```json
+{
+  "fromAgentId": "abc-123",
+  "toCapability": "testing",
+  "message": "Please write tests for auth.ts"
+}
+```
+
+**Broadcast:** Send to all agents on a channel
+```json
+{
+  "fromAgentId": "abc-123",
+  "channel": "deployment",
+  "message": "Deployment starting"
+}
+```
+
+### Natural Language Communication
+
+When you ask an agent to communicate with another agent (e.g., "Can you ask the testing agent to write tests"), Vibecraft automatically:
+
+1. **Detects inter-agent intent** from keywords like "ask the", "tell the", "coordinate with", etc.
+2. **Injects agent context** showing all available agents and their IDs
+3. **Provides ready-to-use curl commands** the agent can execute via Bash
+4. **Formats incoming messages** with response instructions
+
+Example prompt: "Can you ask the openwork agent how they handle context management?"
+
+The agent receives context like:
+```
+[VIBECRAFT AGENT NETWORK]
+You are "Vibecraft Agent" in a multi-agent Vibecraft workspace.
+
+AVAILABLE AGENTS:
+>>> "Openwork Agent" (/Users/zidane/openwork)
+    ID: abc-123-def-456...
+
+QUICK ACTION - Send to "Openwork Agent":
+curl -X POST http://localhost:4003/agents/message -H "Content-Type: application/json" -d '{"fromAgentId": "...", "toAgentId": "abc-123-def-456", "message": "YOUR_MESSAGE_HERE", "expectsResponse": true}'
+...
+```
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `server/AgentRegistry.ts` | Agent discovery and capability tracking |
+| `server/AgentMessageRouter.ts` | Message routing and delivery |
+| `server/index.ts` | `maybeEnhanceWithAgentContext()` for prompt enhancement |
+| `shared/types.ts` | `AgentMessageEvent`, `AgentRegistryEntry` types |
+| `src/api/SessionAPI.ts` | Frontend API client for messaging |
+| `src/events/handlers/agentMessageHandlers.ts` | Event handlers for visualization |
 
 ## Sound System
 

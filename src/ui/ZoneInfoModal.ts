@@ -117,10 +117,23 @@ function renderContent(data: ZoneInfoData): void {
         <span class="zone-info-label">Directory</span>
         <span class="zone-info-value zone-info-mono">${escapeHtml(s.cwd || '~')}</span>
       </div>
+      ${s.backend === 'sdk' ? `
+      <div class="zone-info-row">
+        <span class="zone-info-label">Backend</span>
+        <span class="zone-info-value"><span class="session-backend-badge sdk">SDK</span> ${s.sdkModel ?? 'sonnet'}</span>
+      </div>
+      ${s.sdkCostUsd !== undefined && s.sdkCostUsd > 0 ? `
+      <div class="zone-info-row">
+        <span class="zone-info-label">Cost</span>
+        <span class="zone-info-value session-cost">$${s.sdkCostUsd.toFixed(4)}</span>
+      </div>
+      ` : ''}
+      ` : `
       <div class="zone-info-row">
         <span class="zone-info-label">tmux Session</span>
-        <span class="zone-info-value zone-info-mono">${escapeHtml(s.tmuxSession)}</span>
+        <span class="zone-info-value zone-info-mono">${escapeHtml(s.tmuxSession ?? 'N/A')}</span>
       </div>
+      `}
       <div class="zone-info-row">
         <span class="zone-info-label">Created</span>
         <span class="zone-info-value">${formatTimeAgo(s.createdAt)}</span>

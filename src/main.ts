@@ -215,6 +215,12 @@ function renderManagedSessions(): void {
       el.classList.add('active')
     }
 
+    // Add SDK session class for visual distinction
+    const isSDK = session.backend === 'sdk'
+    if (isSDK) {
+      el.classList.add('sdk-session')
+    }
+
     // Check if session needs attention
     const needsAttention = state.attentionSystem?.needsAttention(session.id) ?? false
     if (needsAttention) {
@@ -231,6 +237,7 @@ function renderManagedSessions(): void {
 
     // Build detail line with status and project
     const projectName = session.cwd ? session.cwd.split('/').pop() : ''
+    const isResumable = isSDK && !!session.sdkResumeId
     let detail = ''
     if (needsAttention) {
       detail = '⚡ Needs attention'
@@ -239,7 +246,13 @@ function renderManagedSessions(): void {
     } else if (session.currentTool) {
       detail = `Using ${session.currentTool}`
     } else if (session.status === 'offline') {
-      detail = lastActive ? `Offline · was ${lastActive}` : 'Offline - click 🔄 to restart'
+      if (isSDK) {
+        detail = isResumable ? '💾 Resumable - click to continue' : 'SDK session ended (no resume data)'
+      } else {
+        detail = lastActive ? `Offline · was ${lastActive}` : 'Offline - click 🔄 to restart'
+      }
+    } else if (session.status === 'idle' && isSDK) {
+      detail = isResumable ? `📁 ${projectName || 'Ready'} (resumable)` : (projectName ? `📁 ${projectName}` : 'Ready')
     } else {
       detail = projectName ? `📁 ${projectName}` : 'Ready'
     }
@@ -254,11 +267,20 @@ function renderManagedSessions(): void {
       ? (lastPrompt.length > 35 ? lastPrompt.slice(0, 32) + '...' : lastPrompt)
       : null
 
+    // Format SDK cost
+    const sdkCost = isSDK && session.sdkCostUsd !== undefined && session.sdkCostUsd > 0
+      ? `$${session.sdkCostUsd.toFixed(4)}`
+      : null
+
     // Build detailed tooltip
     const tooltipParts = [
       `Name: ${session.name}`,
+      `Backend: ${isSDK ? 'SDK' : 'tmux'}`,
       `Status: ${session.status}`,
-      `tmux: ${session.tmuxSession}`,
+      isSDK ? `Model: ${session.sdkModel ?? 'sonnet'}` : `tmux: ${session.tmuxSession}`,
+      isSDK && sdkCost ? `Cost: ${sdkCost}` : null,
+      isSDK && isResumable ? `Resume ID: ${session.sdkResumeId!.slice(0, 12)}...` : null,
+      isSDK && !isResumable ? 'No resume data (session cannot be restored)' : null,
       session.claudeSessionId ? `Claude ID: ${session.claudeSessionId.slice(0, 12)}...` : 'Not linked yet',
       session.cwd ? `Dir: ${session.cwd}` : '',
       session.lastActivity ? `Last active: ${new Date(session.lastActivity).toLocaleString()}` : '',
@@ -266,16 +288,30 @@ function renderManagedSessions(): void {
     ].filter(Boolean)
     el.title = tooltipParts.join('\n')
 
+    // Backend badge HTML
+    const backendBadge = isSDK
+      ? '<span class="session-backend-badge sdk">SDK</span>'
+      : ''
+
+    // SDK cost display
+    const costDisplay = sdkCost
+      ? `<span class="session-cost">${sdkCost}</span>`
+      : ''
+
+    // Show restart button for offline tmux sessions OR resumable SDK sessions
+    const showRestartBtn = session.status === 'offline' && (!isSDK || isResumable)
+    const restartTitle = isSDK ? 'Resume session' : 'Restart session'
+
     el.innerHTML = `
       ${hotkey ? `<div class="session-hotkey">${hotkey}</div>` : ''}
       <div class="session-status ${statusClass}"></div>
       <div class="session-info">
-        <div class="session-name">${escapeHtml(session.name)}</div>
+        <div class="session-name">${escapeHtml(session.name)}${backendBadge}${costDisplay}</div>
         <div class="${detailClass}">${detail}${!needsAttention && session.status !== 'offline' && lastActive ? ` · ${lastActive}` : ''}</div>
         ${truncatedPrompt ? `<div class="session-prompt">💬 ${escapeHtml(truncatedPrompt)}</div>` : ''}
       </div>
       <div class="session-actions">
-        ${session.status === 'offline' ? `<button class="restart-btn" title="Restart session">🔄</button>` : ''}
+        ${showRestartBtn ? `<button class="restart-btn" title="${restartTitle}">🔄</button>` : ''}
         <button class="rename-btn" title="Rename">✏️</button>
         <button class="delete-btn" title="Delete">🗑️</button>
       </div>
@@ -376,9 +412,14 @@ async function createManagedSession(
   cwd?: string,
   flags?: SessionFlags,
   hintPosition?: { x: number; z: number },
-  pendingZoneId?: string
+  pendingZoneId?: string,
+  backend?: 'tmux' | 'sdk',
+  sdkOptions?: { model?: 'sonnet' | 'opus' | 'haiku'; permissionMode?: 'default' | 'acceptEdits' | 'bypassPermissions' }
 ): Promise<void> {
-  const data = await sessionAPI.createSession(name, cwd, flags)
+  // Use new API signature with options object if SDK mode, otherwise use legacy signature
+  const data = backend === 'sdk'
+    ? await sessionAPI.createSession({ name, cwd, backend, sdkOptions })
+    : await sessionAPI.createSession(name, cwd, flags)
 
   if (!data.ok) {
     console.error('Failed to create session:', data.error)
@@ -468,21 +509,27 @@ async function deleteManagedSession(sessionId: string): Promise<void> {
 }
 
 /**
- * Restart an offline session
+ * Restart an offline session (or resume an SDK session)
  */
 async function restartManagedSession(sessionId: string, sessionName: string): Promise<void> {
-  // Show feedback while restarting
+  // Check if this is an SDK session to show appropriate messaging
+  const session = state.managedSessions.find(s => s.id === sessionId)
+  const isSDK = session?.backend === 'sdk'
+  const action = isSDK ? 'Resuming' : 'Restarting'
+  const actionDone = isSDK ? 'resumed' : 'restarted'
+
+  // Show feedback while restarting/resuming
   const statusEl = document.getElementById('connection-status')
   const originalText = statusEl?.textContent
   if (statusEl) {
-    statusEl.textContent = `Restarting ${sessionName}...`
+    statusEl.textContent = `${action} ${sessionName}...`
     statusEl.className = ''
   }
 
   const data = await sessionAPI.restartSession(sessionId)
 
   if (!data.ok) {
-    console.error('Failed to restart session:', data.error)
+    console.error(`Failed to ${action.toLowerCase()} session:`, data.error)
     if (statusEl) {
       statusEl.textContent = `Failed: ${data.error}`
       statusEl.className = 'error'
@@ -493,7 +540,7 @@ async function restartManagedSession(sessionId: string, sessionName: string): Pr
     }
   } else {
     if (statusEl) {
-      statusEl.textContent = `${sessionName} restarted!`
+      statusEl.textContent = `${sessionName} ${actionDone}!`
       statusEl.className = 'connected'
       setTimeout(() => {
         statusEl.textContent = originalText || 'Connected'
@@ -591,6 +638,23 @@ function setupManagedSessions(): void {
     setupDirectoryAutocomplete(cwdInput)
   }
 
+  // Setup SDK mode toggle
+  const sdkModeCheck = document.getElementById('session-opt-sdk-mode') as HTMLInputElement
+  const tmuxOptions = document.getElementById('tmux-options')
+  const sdkOptions = document.getElementById('sdk-options')
+
+  if (sdkModeCheck) {
+    sdkModeCheck.addEventListener('change', () => {
+      const isSDK = sdkModeCheck.checked
+      if (tmuxOptions) {
+        tmuxOptions.classList.toggle('hidden', isSDK)
+      }
+      if (sdkOptions) {
+        sdkOptions.classList.toggle('hidden', !isSDK)
+      }
+    })
+  }
+
   // Auto-populate name from directory when cwd changes
   if (cwdInput && nameInput) {
     cwdInput.addEventListener('input', () => {
@@ -630,7 +694,11 @@ function setupManagedSessions(): void {
     const name = nameInput?.value.trim() || undefined
     const cwd = cwdInput?.value.trim() || undefined
 
-    // Read flag checkboxes
+    // Check if SDK mode is enabled
+    const sdkModeCheck = document.getElementById('session-opt-sdk-mode') as HTMLInputElement
+    const isSDKMode = sdkModeCheck?.checked ?? false
+
+    // Read flag checkboxes (for tmux mode)
     const continueCheck = document.getElementById('session-opt-continue') as HTMLInputElement
     const skipPermsCheck = document.getElementById('session-opt-skip-perms') as HTMLInputElement
     const chromeCheck = document.getElementById('session-opt-chrome') as HTMLInputElement
@@ -640,6 +708,15 @@ function setupManagedSessions(): void {
       skipPermissions: skipPermsCheck?.checked ?? true,
       chrome: chromeCheck?.checked ?? false,
     }
+
+    // Read SDK options (for SDK mode)
+    const sdkModelSelect = document.getElementById('session-sdk-model') as HTMLSelectElement
+    const sdkPermissionSelect = document.getElementById('session-sdk-permission') as HTMLSelectElement
+
+    const sdkOptions = isSDKMode ? {
+      model: (sdkModelSelect?.value ?? 'sonnet') as 'sonnet' | 'opus' | 'haiku',
+      permissionMode: (sdkPermissionSelect?.value ?? 'bypassPermissions') as 'default' | 'acceptEdits' | 'bypassPermissions',
+    } : undefined
 
     // Capture hint before closing modal (closeModal clears it)
     const hintPosition = currentModalHint
@@ -667,7 +744,15 @@ function setupManagedSessions(): void {
     soundManager.play('modal_confirm')
 
     closeModal()
-    createManagedSession(name, cwd, flags, hintPosition ?? undefined, pendingId)
+    createManagedSession(
+      name,
+      cwd,
+      flags,
+      hintPosition ?? undefined,
+      pendingId,
+      isSDKMode ? 'sdk' : 'tmux',
+      sdkOptions
+    )
   }
 
   const handleCancel = (): void => {
@@ -2697,18 +2782,36 @@ function init() {
         claudeToManagedLink.set(session.claudeSessionId, session.id)
 
         // Proactively create zone if it doesn't exist yet
-        // This handles sessions that have no recent events in history
+        // This handles sessions that have no recent events in history (e.g., SDK sessions)
         if (state.scene && !state.scene.zones.has(session.claudeSessionId)) {
-          // Use saved position if available
+          // Use saved position if available, or pending hint from modal
           let hintPosition: { x: number; z: number } | undefined
           if (session.zonePosition) {
             const cartesian = state.scene.hexGrid.axialToCartesian(session.zonePosition)
             hintPosition = { x: cartesian.x, z: cartesian.z }
             console.log(`Restoring zone for "${session.name}" at saved position`, session.zonePosition)
           } else {
+            // Check for pending hint from modal click
+            hintPosition = pendingZoneHints.get(session.name)
+            if (hintPosition) {
+              pendingZoneHints.delete(session.name)
+            }
             console.log(`Creating zone for session "${session.name}" (no recent events in history)`)
           }
           const zone = state.scene.createZone(session.claudeSessionId, { hintPosition })
+
+          // Clean up pending zone now that real zone exists (for SDK sessions)
+          const pendingZoneId = pendingZonesToCleanup.get(session.name)
+          if (pendingZoneId) {
+            state.scene.removePendingZone(pendingZoneId)
+            pendingZonesToCleanup.delete(session.name)
+            // Clear the timeout since zone was created successfully
+            const timeoutId = pendingZoneTimeouts.get(pendingZoneId)
+            if (timeoutId) {
+              clearTimeout(timeoutId)
+              pendingZoneTimeouts.delete(pendingZoneId)
+            }
+          }
 
           // Play zone creation sound
           if (state.soundEnabled) {
