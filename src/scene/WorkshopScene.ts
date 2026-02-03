@@ -566,6 +566,13 @@ export class WorkshopScene {
     this.scene.add(sideMesh)
     sideMesh.position.copy(position)
 
+    // Determine initial elevation
+    // Check if this is the first zone and if "elevate first zone" setting is enabled
+    const isFirstZone = this.zones.size === 0
+    const shouldElevateFirst = typeof localStorage !== 'undefined' &&
+      localStorage.getItem('vibecraft-elevate-first-zone') === 'true'
+    const initialElevation = (isFirstZone && shouldElevateFirst) ? 3 : 0
+
     const zone: Zone = {
       id: sessionId,
       group,
@@ -586,14 +593,22 @@ export class WorkshopScene {
       // Start animation
       animationState: 'entering',
       animationProgress: 0,
-      // Elevation from painting
-      elevation: 0,
+      // Elevation from painting (or initial elevation for first zone)
+      elevation: initialElevation,
       edgeLines,
       sideMesh,
     }
 
     // Start with scale 0 for enter animation
     group.scale.setScalar(0.01)
+
+    // Set initial group position if elevated
+    if (initialElevation > 0) {
+      group.position.y = initialElevation
+      // Update edge lines and side mesh to show elevation
+      this.updateZoneEdgeLines(zone)
+      this.updateZoneSideMesh(zone)
+    }
 
     // Hide elements initially (they'll fade in)
     for (const station of stations.values()) {
@@ -609,6 +624,11 @@ export class WorkshopScene {
 
     // Create station panels for this zone
     this.stationPanels.createPanelsForZone(sessionId, position, zoneColor)
+
+    // Notify about initial elevation if elevated
+    if (initialElevation > 0) {
+      this.notifyZoneElevationChange(sessionId, initialElevation)
+    }
 
     // Legacy compat: first zone's stations become default
     if (this.zones.size === 1) {

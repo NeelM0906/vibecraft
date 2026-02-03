@@ -2349,6 +2349,7 @@ function setupSettingsModal(): void {
   const streamingCheckbox = document.getElementById('settings-streaming-mode') as HTMLInputElement | null
   const gridSizeSlider = document.getElementById('settings-grid-size') as HTMLInputElement | null
   const gridSizeValue = document.getElementById('settings-grid-size-value')
+  const elevateFirstZoneCheckbox = document.getElementById('settings-elevate-first-zone') as HTMLInputElement | null
   const refreshBtn = document.getElementById('settings-refresh-sessions')
 
   if (!modal) return
@@ -2407,6 +2408,17 @@ function setupSettingsModal(): void {
     applyStreamingMode(enabled)
   }
 
+  // Load saved elevate first zone setting from localStorage (default: true)
+  const savedElevateFirstZone = localStorage.getItem('vibecraft-elevate-first-zone')
+  if (savedElevateFirstZone !== null) {
+    const enabled = savedElevateFirstZone === 'true'
+    if (elevateFirstZoneCheckbox) elevateFirstZoneCheckbox.checked = enabled
+  } else {
+    // Default to true (enabled) if not set
+    localStorage.setItem('vibecraft-elevate-first-zone', 'true')
+    if (elevateFirstZoneCheckbox) elevateFirstZoneCheckbox.checked = true
+  }
+
   // Apply streaming mode (hide/show username)
   function applyStreamingMode(enabled: boolean) {
     const usernameEl = document.getElementById('username')
@@ -2441,6 +2453,10 @@ function setupSettingsModal(): void {
     // Sync streaming mode checkbox
     if (streamingCheckbox) {
       streamingCheckbox.checked = localStorage.getItem('vibecraft-streaming-mode') === 'true'
+    }
+    // Sync elevate first zone checkbox
+    if (elevateFirstZoneCheckbox) {
+      elevateFirstZoneCheckbox.checked = localStorage.getItem('vibecraft-elevate-first-zone') === 'true'
     }
     // Sync port input
     if (portInput) portInput.value = String(AGENT_PORT)
@@ -2496,6 +2512,12 @@ function setupSettingsModal(): void {
     const enabled = streamingCheckbox.checked
     localStorage.setItem('vibecraft-streaming-mode', String(enabled))
     applyStreamingMode(enabled)
+  })
+
+  // Elevate first zone checkbox
+  elevateFirstZoneCheckbox?.addEventListener('change', () => {
+    const enabled = elevateFirstZoneCheckbox.checked
+    localStorage.setItem('vibecraft-elevate-first-zone', String(enabled))
   })
 
   // Port change - save to localStorage and prompt refresh
