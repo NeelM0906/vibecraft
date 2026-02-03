@@ -546,7 +546,7 @@ export class WorkshopScene {
 
     // Create git status label on floor
     const gitLabel = this.createGitLabel()
-    gitLabel.position.set(0, 0.15, 2.5)  // Near front edge of hex
+    gitLabel.position.set(0, 2.5, 0)  // Middle of hex
     gitLabel.visible = false  // Hidden until we have git data
     group.add(gitLabel)
 
@@ -623,7 +623,7 @@ export class WorkshopScene {
     // Apply pending elevation if one was loaded from localStorage
     const pendingElevation = this.pendingZoneElevations.get(sessionId)
     if (pendingElevation !== undefined) {
-      this.setZoneElevation(sessionId, pendingElevation)
+      this.setZoneElevation(sessionId, pendingElevation + 5)
       this.pendingZoneElevations.delete(sessionId)
     }
 
@@ -1753,7 +1753,7 @@ export class WorkshopScene {
       opacity: 0.9,
     })
     const sprite = new THREE.Sprite(material)
-    sprite.scale.set(3, 0.6, 1)
+    sprite.scale.set(4, 0.6, 1)
 
     return sprite
   }
@@ -1798,7 +1798,7 @@ export class WorkshopScene {
     // Draw the label
     const canvas = document.createElement('canvas')
     const ctx = canvas.getContext('2d')!
-    canvas.width = 256
+    canvas.width = 368
     canvas.height = 48
 
     ctx.clearRect(0, 0, canvas.width, canvas.height)
