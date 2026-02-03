@@ -30,7 +30,7 @@ npm-debug.log*
 
 # TypeScript cache
 *.tsbuildinfo
-*.png
+# *.png
 !public/og-image.png
 !public/multiclaude.png
 bin/vibecraft
