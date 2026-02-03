@@ -2,18 +2,21 @@
 
 /* Scene overlay elements */
 #scene-hud {
-  position: absolute;
-  top: 0;
+  position: fixed;
+  top: 50px;
   left: 0;
-  right: 0;
-  padding: 12px;
+  width: 60%;
+  height: 48px;
+  background: transparent;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
   display: flex;
-  justify-content: space-between;
-  pointer-events: none;
+  align-items: center;
+  z-index: 1000;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 .scene-badge {
-  background: rgba(0, 0, 0, 0.7);
+  background: rgba(0, 0, 0, 0.3);
   backdrop-filter: blur(8px);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 6px;
@@ -26,6 +29,72 @@
 
 .unified-hud {
   gap: 10px;
+}
+
+.scene-badge.unified-hud {
+  max-width: none;
+  margin: 0 0px;
+  padding: 1 16px;
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  color: #e5e7eb;
+  font-size: 14px;
+}
+
+/* HEADER (replaces image) */
+.hud-header {
+  display: flex;
+  align-items: flex-end;
+  gap: 14px;
+  cursor: pointer;
+}
+
+/* 🔑 THIS IS THE ALIGNMENT FIX */
+#hud-header {
+  margin-right: auto;
+}
+
+.hud-header img {
+  width: 120px;
+  height: auto;
+  opacity: 1;
+  transition: opacity 0.2s ease;
+  flex-shrink: 0;
+}
+
+.hud-header img:hover {
+  opacity: 1;
+}
+
+.hud-header-text {
+  padding-bottom: 2px;
+}
+
+.hud-header-title {
+  font-family: "Cinzel", serif;
+  font-size: 24px;
+  font-weight: 800;
+  margin: 0;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  line-height: 1.1;
+
+  background: linear-gradient(90deg, #f5d36a, #ac8406);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+
+  text-shadow: 0 2px 6px rgba(0,0,0,0.6);
+}
+
+.hud-header-subtitle {
+  font-family: "Cinzel", serif;
+  font-size: 14px;
+  color: #cbd5f5;
+  opacity: 0.9;
 }
 
 .hud-user {
@@ -76,8 +145,8 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #666;
-  transition: background 0.3s;
+  background: #22c55e;
+  box-shadow: 0 0 6px rgba(34,197,94,0.8);
 }
 
 #status-dot.connected {
@@ -93,18 +162,17 @@
 
 /* HUD button */
 .hud-btn {
-  background: none;
+  background: transparent;
   border: none;
+  color: #e5e7eb;
   cursor: pointer;
-  font-size: 14px;
-  padding: 2px 4px;
-  border-radius: 4px;
-  transition: background 0.15s, transform 0.1s;
-  pointer-events: auto;
+  font-size: 16px;
+  padding: 4px 6px;
+  border-radius: 6px;
 }
 
 .hud-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255,255,255,0.08);
 }
 
 .hud-btn:active {
@@ -393,7 +461,7 @@
 /* Draw Mode Indicator */
 #draw-indicator {
   position: absolute;
-  top: 60px;
+  top: 160px;
   left: 50%;
   transform: translateX(-50%);
   background: rgba(34, 211, 238, 0.15);

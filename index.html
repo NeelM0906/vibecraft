@@ -5,6 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Watch and Manage Claude Code in 3D!" />
     <meta name="theme-color" content="#0f172a" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&display=swap" rel="stylesheet" />
+
     <title>Vibecraft - Watch and Manage Claude Code in 3D!</title>
 
     <!-- Favicon -->
@@ -33,89 +38,14 @@
         <div id="canvas-container"></div>
 
         <!-- FULL SCENE BANNER -->
-<style>
-  #scene-hud {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 60%;
-    height: 56px;
-    background: linear-gradient(90deg, #0f172a, #020617);
-    border-bottom: 1px solid rgba(255,255,255,0.08);
-    display: flex;
-    align-items: center;
-    z-index: 1000;
-    font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-  }
-
-  .scene-badge.unified-hud {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 0 16px;
-    width: 100%;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    color: #e5e7eb;
-    font-size: 14px;
-  }
-
-  /* Image / logo */
-  .hud-logo {
-    width: 28px;
-    height: 28px;
-    border-radius: 6px;
-    object-fit: cover;
-    flex-shrink: 0;
-  }
-
-  #status-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: #22c55e;
-    box-shadow: 0 0 6px rgba(34,197,94,0.8);
-  }
-
-  .hud-user {
-    font-weight: 600;
-  }
-
-  .hud-sep {
-    opacity: 0.3;
-    margin: 0 4px;
-  }
-
-  .hud-tokens {
-    font-variant-numeric: tabular-nums;
-    opacity: 0.9;
-  }
-
-  .hud-btn {
-    background: transparent;
-    border: none;
-    color: #e5e7eb;
-    cursor: pointer;
-    font-size: 16px;
-    padding: 4px 6px;
-    border-radius: 6px;
-  }
-
-  .hud-btn:hover {
-    background: rgba(255,255,255,0.08);
-  }
-</style>
 
 <div id="scene-hud">
   <div class="scene-badge unified-hud">
 
-    <!-- LEFT IMAGE -->
-    <img
-      src="public/ACTIai.png"
-      alt="Scene logo"
-      class="hud-logo"
-    />
+    <!-- LEFT-ALIGNED HEADER -->
+    <div id="hud-header"></div>
 
+    <!-- RIGHT-ALIGNED CONTENT -->
     <div id="status-dot"></div>
 
     <span id="username" class="hud-user">...</span>
@@ -132,6 +62,28 @@
     <button id="settings-btn" class="hud-btn" title="Settings">⚙️</button>
   </div>
 </div>
+
+<script>
+  const header = document.getElementById('hud-header');
+
+  header.innerHTML = `
+    <div class="hud-header" onclick="handleNavigation('/')">
+      <img src="public/ACTIai.png" alt="ACTi Logo" />
+      <div class="hud-header-text">
+        <h1 class="hud-header-title">Vibecraft</h1>
+        <div class="hud-header-subtitle">
+          An Actualized Intelligence Agent Building Tool
+        </div>
+      </div>
+    </div>
+  `;
+
+  function handleNavigation(path) {
+    console.log('Navigate to:', path);
+    // window.location.href = path;
+  }
+</script>
+
 
 
         <!-- Dev Panel (animations test) - hidden by default -->

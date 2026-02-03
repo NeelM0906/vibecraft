@@ -70,16 +70,16 @@ export interface Zone {
 
 export type CameraMode = 'focused' | 'overview' | 'follow-active'
 
-// Zone colors for different sessions - ice/cyan theme
+// Zone colors for different sessions - golden theme
 export const ZONE_COLORS = [
-  0xfbbf24, // Bright Gold
-  0xf0ad3a,
-  0xe29a52,
-  0xd1876b,
-  0xbd7484,
-  0xa8619d,
-  0x8f4ab6,
-  0x5b1a8f, // Brightened Purple
+  0xFBBF24, // Gold (base)
+  0xFF9F1C, // Hot Orange Gold (warmer)
+  0xFF7A18, // Molten Amber (very warm)
+  0xFFB703, // Solar Amber
+  0xFFD000, // Bright Sun Yellow
+  0xFFF200, // Electric Yellow (cooler)
+  0xFFE066, // Cool Lemon Gold
+  0xFDBA1A, // Returning Gold
 ]
 
 export class WorkshopScene {
@@ -1234,11 +1234,13 @@ export class WorkshopScene {
     const floorShape = this.createHexagonShape(hexRadius)
     const floorGeometry = new THREE.ShapeGeometry(floorShape)
     const floorMaterial = new THREE.MeshStandardMaterial({
-      color: 0x1a2535,  // Slightly brighter blue - more "active"
+      color: color,  // Slightly brighter blue - more "active"
       roughness: 0.7,
       metalness: 0.15,
       emissive: color,
-      emissiveIntensity: 0.02,  // Subtle glow from zone color
+      emissiveIntensity: 6,  // Subtle glow from zone color
+      opacity: 1,
+      transparent: true,
     })
     const floor = new THREE.Mesh(floorGeometry, floorMaterial)
     floor.rotation.x = -Math.PI / 2
@@ -2199,7 +2201,7 @@ export class WorkshopScene {
     const ring = new THREE.Mesh(ringGeometry, ringMaterial)
     ring.rotation.x = -Math.PI / 2
     ring.position.y = 0.02
-    stationGroup.add(ring)
+    // stationGroup.add(ring)
 
     stationGroup.position.set(x, y, z)
     zoneGroup.add(stationGroup)
@@ -2226,18 +2228,19 @@ export class WorkshopScene {
     const ambient = new THREE.AmbientLight(0x606080, 0.8)
     this.scene.add(ambient)
 
-    // Main directional light (sun) - reduced shadow map for performance
+    // Main directional light (sun) - covers entire workspace with diagonal shadows
     const sun = new THREE.DirectionalLight(0xfff5e6, 1.2)
-    sun.position.set(5, 10, 5)
+    sun.position.set(15, 20, 15)  // Higher and further for diagonal shadows across entire space
     sun.castShadow = true
-    sun.shadow.mapSize.width = 512  // Reduced from 2048
-    sun.shadow.mapSize.height = 512
+    sun.shadow.mapSize.width = 2048  // Higher quality for larger area
+    sun.shadow.mapSize.height = 2048
     sun.shadow.camera.near = 1
-    sun.shadow.camera.far = 20
-    sun.shadow.camera.left = -8
-    sun.shadow.camera.right = 8
-    sun.shadow.camera.top = 8
-    sun.shadow.camera.bottom = -8
+    sun.shadow.camera.far = 100  // Covers multiple zones
+    sun.shadow.camera.left = -80  // Large bounds to cover all zones
+    sun.shadow.camera.right = 80
+    sun.shadow.camera.top = 80
+    sun.shadow.camera.bottom = -80
+    sun.shadow.bias = -0.0005  // Reduce shadow artifacts
     this.scene.add(sun)
 
     // Hemisphere light for nice ambient fill (cheaper than point lights)
