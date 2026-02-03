@@ -72,14 +72,14 @@ export type CameraMode = 'focused' | 'overview' | 'follow-active'
 
 // Zone colors for different sessions - ice/cyan theme
 export const ZONE_COLORS = [
-  0x4ac8e8, // Cyan (primary)
-  0x60a5fa, // Blue
-  0x22d3d8, // Teal
-  0x4ade80, // Green
-  0xa78bfa, // Purple
-  0xfbbf24, // Orange
-  0xf472b6, // Pink
-  0xa3e635, // Lime
+  0xfbbf24, // Bright Gold
+  0xf0ad3a,
+  0xe29a52,
+  0xd1876b,
+  0xbd7484,
+  0xa8619d,
+  0x8f4ab6,
+  0x5b1a8f, // Brightened Purple
 ]
 
 export class WorkshopScene {
@@ -230,7 +230,7 @@ export class WorkshopScene {
 
     // Scene - dark blue-black like ice cave
     this.scene = new THREE.Scene()
-    this.scene.background = new THREE.Color(0x080c14)
+    this.scene.background = new THREE.Color(0x24003d)
     // No fog - allows viewing multiple zones without fadeout
 
     // Hex grid for zone placement (radius=10, spacing=1.0 for touching hexes)
@@ -307,7 +307,7 @@ export class WorkshopScene {
 
     const geometry = new THREE.BufferGeometry().setFromPoints(points)
     const material = new THREE.LineBasicMaterial({
-      color: 0x8eeeff,  // Light cyan
+      color: 0x7c3aed,  // Light purple
       transparent: true,
       opacity: 0.7,
     })
@@ -2322,7 +2322,7 @@ export class WorkshopScene {
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3))
 
     const material = new THREE.LineBasicMaterial({
-      color: 0x4ac8e8,  // Cyan/ice blue
+      color: 0x5b1a8f,  // Purple
       transparent: true,
       opacity: 0.35,
     })
