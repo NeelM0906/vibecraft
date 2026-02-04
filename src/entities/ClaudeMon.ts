@@ -116,7 +116,7 @@ export class Claude implements ICharacter {
     const group = new THREE.Group()
 
     // Main head - rounded cube shape (robot but friendly)
-    const headGeometry = new THREE.SphereGeometry(0.28, 32, 32)
+    const headGeometry = new THREE.SphereGeometry(0.22, 32, 32)
     headGeometry.scale(1, 0.9, 0.85)
     const headMaterial = new THREE.MeshStandardMaterial({
       color: this.options.color,
@@ -236,7 +236,7 @@ export class Claude implements ICharacter {
     const group = new THREE.Group()
 
     // Main body - chunky rounded shape
-    const bodyGeometry = new THREE.CylinderGeometry(0.18, 0.22, 0.3, 16)
+    const bodyGeometry = new THREE.CylinderGeometry(0.12, 0.14, 0.3, 16)
     const bodyMaterial = new THREE.MeshStandardMaterial({
       color: this.options.color,
       roughness: 0.35,
@@ -246,43 +246,67 @@ export class Claude implements ICharacter {
     body.castShadow = true
     group.add(body)
 
-    // Chest panel with glow
-    const panelGeometry = new THREE.PlaneGeometry(0.16, 0.12)
+    // Chest panel with glow - lightning bolt shape
+    // Top-left triangle
+    const topLeftShape = new THREE.Shape()
+    topLeftShape.moveTo(0, 0.085)
+    topLeftShape.lineTo(-0.026, 0.030)
+    topLeftShape.lineTo(0.013, 0.025)
+    topLeftShape.lineTo(0, 0.085)
+
+    const topLeftGeometry = new THREE.ShapeGeometry(topLeftShape)
     const panelMaterial = new THREE.MeshBasicMaterial({
-      color: 0x1a1a2e,
+      color: 0xfbbf24, // Yellow/Amber
       transparent: true,
       opacity: 0.8,
     })
-    const panel = new THREE.Mesh(panelGeometry, panelMaterial)
-    panel.position.set(0, 0.02, 0.18)
-    group.add(panel)
+    const topLeftMesh = new THREE.Mesh(topLeftGeometry, panelMaterial.clone())
+    topLeftMesh.position.set(0, 0.02, 0.18)
+    group.add(topLeftMesh)
 
-    // Chest light (status indicator)
-    const lightGeometry = new THREE.CircleGeometry(0.03, 16)
+    // Bottom-right triangle
+    const bottomRightShape = new THREE.Shape()
+    bottomRightShape.moveTo(0.030, 0.025)
+    bottomRightShape.lineTo(0.030, 0.035)
+    bottomRightShape.lineTo(-0.004, 0.035)
+    bottomRightShape.lineTo(0.009, -0.025)
+
+    const bottomRightGeometry = new THREE.ShapeGeometry(bottomRightShape)
+    const bottomRightMesh = new THREE.Mesh(bottomRightGeometry, panelMaterial.clone())
+    bottomRightMesh.position.set(0, 0.02, 0.18)
+    group.add(bottomRightMesh)
+
+    // Chest light (status indicator) - lightning bolt glow
     const lightMaterial = new THREE.MeshBasicMaterial({
-      color: 0xa78bfa, // Purple accent
+      color: 0xfbbf24, // Yellow/Amber
       transparent: true,
       opacity: 0.9,
     })
-    const chestLight = new THREE.Mesh(lightGeometry, lightMaterial)
-    chestLight.position.set(0, 0.02, 0.181)
-    chestLight.name = 'chestLight'
-    group.add(chestLight)
+    const topLeftGlowGeometry = new THREE.ShapeGeometry(topLeftShape)
+    const topLeftGlow = new THREE.Mesh(topLeftGlowGeometry, lightMaterial.clone())
+    topLeftGlow.position.set(0, 0.02, 0.181)
+    topLeftGlow.name = 'chestLight'
+    group.add(topLeftGlow)
+
+    const bottomRightGlowGeometry = new THREE.ShapeGeometry(bottomRightShape)
+    const bottomRightGlow = new THREE.Mesh(bottomRightGlowGeometry, lightMaterial.clone())
+    bottomRightGlow.position.set(0, 0.02, 0.181)
+    group.add(bottomRightGlow)
 
     // Belt/waist detail
-    const beltGeometry = new THREE.TorusGeometry(0.2, 0.02, 8, 32)
+    const beltGeometry = new THREE.TorusGeometry(0.125, 0.014, 8, 32)
     const beltMaterial = new THREE.MeshStandardMaterial({
-      color: 0x4a5a6a,
+      color: 0xfeef79,
       roughness: 0.3,
       metalness: 0.7,
     })
     const belt = new THREE.Mesh(beltGeometry, beltMaterial)
     belt.rotation.x = Math.PI / 2
-    belt.position.y = -0.12
+    belt.position.y = -0.04
     group.add(belt)
 
     // Legs - stubby robot legs
-    const legGeometry = new THREE.CylinderGeometry(0.06, 0.07, 0.15, 12)
+    const legGeometry = new THREE.CylinderGeometry(0.04, 0.05, 0.15, 12)
     const legMaterial = new THREE.MeshStandardMaterial({
       color: 0x3a4a5a,
       roughness: 0.4,
@@ -300,7 +324,7 @@ export class Claude implements ICharacter {
     group.add(rightLeg)
 
     // Feet - rounded robot feet
-    const footGeometry = new THREE.SphereGeometry(0.07, 12, 8)
+    const footGeometry = new THREE.SphereGeometry(0.05, 12, 8)
     footGeometry.scale(1.2, 0.5, 1.3)
     const footMaterial = new THREE.MeshStandardMaterial({
       color: 0x2a3a4a,
@@ -326,7 +350,7 @@ export class Claude implements ICharacter {
     const group = new THREE.Group()
 
     // Shoulder joint
-    const shoulderGeometry = new THREE.SphereGeometry(0.05, 12, 12)
+    const shoulderGeometry = new THREE.SphereGeometry(0.04, 12, 12)
     const jointMaterial = new THREE.MeshStandardMaterial({
       color: 0x4a5a6a,
       roughness: 0.3,
@@ -348,13 +372,13 @@ export class Claude implements ICharacter {
     group.add(arm)
 
     // Hand - cute rounded claw/gripper
-    const handGeometry = new THREE.SphereGeometry(0.045, 12, 12)
+    const handGeometry = new THREE.SphereGeometry(0.038, 12, 12)
     const hand = new THREE.Mesh(handGeometry, jointMaterial)
     hand.position.y = -0.18
     hand.name = 'hand'
     group.add(hand)
 
-    group.position.set(side * 0.24, 0.26, 0)
+    group.position.set(side * 0.175, 0.26, 0)
     return group
   }
 
@@ -413,11 +437,11 @@ export class Claude implements ICharacter {
 
     const leftLine = new THREE.Mesh(lineGeometry, lineMaterial.clone())
     leftLine.position.set(-0.12, 0.22, 0.19)
-    group.add(leftLine)
+    // group.add(leftLine)
 
     const rightLine = new THREE.Mesh(lineGeometry, lineMaterial.clone())
     rightLine.position.set(0.12, 0.22, 0.19)
-    group.add(rightLine)
+    // group.add(rightLine)
 
     return group
   }
