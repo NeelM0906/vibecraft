@@ -85,7 +85,7 @@ export class Claude implements ICharacter {
     this.mesh.add(this.body)
     this.mesh.add(this.leftArm)
     this.mesh.add(this.rightArm)
-    this.mesh.add(this.antenna)
+    // this.mesh.add(this.antenna)
     this.mesh.add(this.statusRing)
     this.mesh.add(this.thoughtBubbles)
     this.mesh.add(this.glowAccents)
@@ -119,9 +119,9 @@ export class Claude implements ICharacter {
     const headGeometry = new THREE.SphereGeometry(0.22, 32, 32)
     headGeometry.scale(1, 0.9, 0.85)
     const headMaterial = new THREE.MeshStandardMaterial({
-      color: this.options.color,
-      roughness: 0.3,
-      metalness: 0.7,
+      color: 0xffd1a3, // White/peachy skin tone
+      roughness: 0.6,
+      metalness: 0.1,
     })
     const head = new THREE.Mesh(headGeometry, headMaterial)
     head.castShadow = true
@@ -136,8 +136,8 @@ export class Claude implements ICharacter {
     })
     const visor = new THREE.Mesh(visorGeometry, visorMaterial)
     visor.name = 'visor'
-    visor.position.set(0, 0.02, 0.24)
-    group.add(visor)
+    visor.position.set(0, 0.02, 0.19)
+    // group.add(visor)
 
     // Visor frame/border (glowing edge)
     const frameGeometry = new THREE.RingGeometry(0.17, 0.19, 32)
@@ -148,8 +148,8 @@ export class Claude implements ICharacter {
       opacity: 0.6,
     })
     const frame = new THREE.Mesh(frameGeometry, frameMaterial)
-    frame.position.set(0, 0.02, 0.241)
-    group.add(frame)
+    frame.position.set(0, 0.02, 0.191)
+    // group.add(frame)
 
     // LED Eyes - rounded rectangle shape (like LED displays)
     const eyeShape = new THREE.Shape()
@@ -174,12 +174,12 @@ export class Claude implements ICharacter {
 
     const leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial.clone())
     leftEye.name = 'leftEye'
-    leftEye.position.set(-0.07, 0.03, 0.242)
+    leftEye.position.set(-0.07, 0.03, 0.192)
     group.add(leftEye)
 
     const rightEye = new THREE.Mesh(eyeGeometry, eyeMaterial.clone())
     rightEye.name = 'rightEye'
-    rightEye.position.set(0.07, 0.03, 0.242)
+    rightEye.position.set(0.07, 0.03, 0.192)
     group.add(rightEye)
 
     // Cute mouth - small curved LED line
@@ -191,12 +191,12 @@ export class Claude implements ICharacter {
     const mouthPoints = mouthCurve.getPoints(10)
     const mouthGeometry = new THREE.BufferGeometry().setFromPoints(mouthPoints)
     const mouthMaterial = new THREE.LineBasicMaterial({
-      color: 0x67e8f9,
+      color: 0x000000,
       transparent: true,
       opacity: 0.8,
     })
     const mouth = new THREE.Line(mouthGeometry, mouthMaterial)
-    mouth.position.set(0, -0.04, 0.242)
+    mouth.position.set(0, -0.04, 0.192)
     group.add(mouth)
 
     // Panel line details on head
@@ -208,25 +208,48 @@ export class Claude implements ICharacter {
     const panelLine = new THREE.Mesh(panelGeometry, panelMaterial)
     panelLine.rotation.x = Math.PI / 2
     panelLine.position.y = 0.05
-    group.add(panelLine)
+    // group.add(panelLine)
 
-    // "Ear" speakers - cute round accents
-    const earGeometry = new THREE.CylinderGeometry(0.06, 0.06, 0.04, 16)
+    // Human-like ears
     const earMaterial = new THREE.MeshStandardMaterial({
-      color: 0x3a4a5a,
-      roughness: 0.4,
-      metalness: 0.6,
+      color: 0xffd1a3, // Same skin tone as head
+      roughness: 0.6,
+      metalness: 0.1,
     })
 
-    const leftEar = new THREE.Mesh(earGeometry, earMaterial)
-    leftEar.rotation.z = Math.PI / 2
-    leftEar.position.set(-0.26, 0.02, 0)
+    // Create ear shape using sphere geometry scaled to look like human ear
+    const earGeometry = new THREE.SphereGeometry(0.05, 16, 16)
+    earGeometry.scale(0.5, 1, 0.8) // Flatten and shape like ear
+
+    const leftEar = new THREE.Mesh(earGeometry, earMaterial.clone())
+    leftEar.rotation.y = -Math.PI / 4 // Angle slightly back
+    leftEar.position.set(-0.22, 0.02, 0.05)
     group.add(leftEar)
 
-    const rightEar = new THREE.Mesh(earGeometry, earMaterial)
-    rightEar.rotation.z = Math.PI / 2
-    rightEar.position.set(0.26, 0.02, 0)
+    const rightEar = new THREE.Mesh(earGeometry, earMaterial.clone())
+    rightEar.rotation.y = Math.PI / 4 // Angle slightly back
+    rightEar.position.set(0.22, 0.02, 0.05)
     group.add(rightEar)
+
+    // Short black hair on top of head
+    const hairMaterial = new THREE.MeshStandardMaterial({
+      color: 0x000000, // Black
+      roughness: 0.8,
+      metalness: 0.1,
+    })
+
+    // Main hair cap - hemisphere on top of head
+    const hairCapGeometry = new THREE.SphereGeometry(0.22, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2)
+    const hairCap = new THREE.Mesh(hairCapGeometry, hairMaterial)
+    hairCap.position.set(0, 0.1, 0)
+    group.add(hairCap)
+
+    // Front hair tuft - slight protrusion at front
+    const frontHairGeometry = new THREE.SphereGeometry(0.08, 16, 16)
+    frontHairGeometry.scale(1, 0.8, 1.2)
+    const frontHair = new THREE.Mesh(frontHairGeometry, hairMaterial.clone())
+    frontHair.position.set(0, 0.12, 0.18)
+    group.add(frontHair)
 
     group.position.y = 0.52
     return group
@@ -394,9 +417,9 @@ export class Claude implements ICharacter {
     // Shoulder joint
     const shoulderGeometry = new THREE.SphereGeometry(0.04, 12, 12)
     const jointMaterial = new THREE.MeshStandardMaterial({
-      color: 0x4a5a6a,
+      color: 0x161616,
       roughness: 0.3,
-      metalness: 0.7,
+      metalness: 0.1,
     })
     const shoulder = new THREE.Mesh(shoulderGeometry, jointMaterial)
     group.add(shoulder)
@@ -406,7 +429,7 @@ export class Claude implements ICharacter {
     const armMaterial = new THREE.MeshStandardMaterial({
       color: 0x000000, // Black
       roughness: 0.4,
-      metalness: 0.6,
+      metalness: 0.1,
     })
     const arm = new THREE.Mesh(armGeometry, armMaterial)
     arm.position.y = -0.1
@@ -420,7 +443,7 @@ export class Claude implements ICharacter {
     hand.name = 'hand'
     group.add(hand)
 
-    group.position.set(side * 0.175, 0.26, 0)
+    group.position.set(side * 0.175, 0.3, 0)
     return group
   }
 
@@ -604,8 +627,8 @@ export class Claude implements ICharacter {
         material.color.setHex(0x4ade80) // Green
         material.opacity = 0.5
         antennaMaterial.color.setHex(0x4ade80)
-        leftEyeMat.color.setHex(0x67e8f9)
-        rightEyeMat.color.setHex(0x67e8f9)
+        leftEyeMat.color.setHex(0x34b5e8)
+        rightEyeMat.color.setHex(0x34b5e8)
         break
       case 'walking':
         material.color.setHex(0x60a5fa) // Blue
@@ -766,8 +789,8 @@ export class Claude implements ICharacter {
     } else if (this.state !== 'working') {
       this.thoughtBubbles.visible = false
       // Reset positions
-      this.leftEye.position.set(-0.07, 0.03, 0.242)
-      this.rightEye.position.set(0.07, 0.03, 0.242)
+      this.leftEye.position.set(-0.07, 0.03, 0.192)
+      this.rightEye.position.set(0.07, 0.03, 0.192)
       this.head.rotation.z = 0
       this.rightArm.rotation.z = 0
     }
