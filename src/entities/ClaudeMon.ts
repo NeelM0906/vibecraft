@@ -217,9 +217,9 @@ export class Claude implements ICharacter {
 
     // Short black hair on top of head
     const hairMaterial = new THREE.MeshStandardMaterial({
-      color: 0x000000, // Black
+      color: 0x202020, // Black
       roughness: 0.8,
-      metalness: 0.1,
+      metalness: 0.0,
     })
 
     // Main hair cap - hemisphere on top of head
@@ -234,6 +234,45 @@ export class Claude implements ICharacter {
     const frontHair = new THREE.Mesh(frontHairGeometry, hairMaterial.clone())
     frontHair.position.set(0, 0.12, 0.18)
     group.add(frontHair)
+
+    // Buzzed grey hair on back and sides of head with gradient effect
+    // Create gradient by layering multiple hair sections from grey (bottom) to black (top)
+
+    // Bottom layer - light grey
+    const bottomHairMaterial = new THREE.MeshStandardMaterial({
+      color: 0x808080, // Light grey
+      roughness: 0.9,
+      metalness: 0.05,
+    })
+    const bottomHairGeometry = new THREE.SphereGeometry(0.222, 32, 32, Math.PI / 2.5, Math.PI * 1.2, Math.PI / 2.2, Math.PI / 6)
+    const bottomHair = new THREE.Mesh(bottomHairGeometry, bottomHairMaterial)
+    bottomHair.position.set(0, -0.02, 0)
+    bottomHair.rotation.y = Math.PI / 2
+    group.add(bottomHair)
+
+    // Middle layer - medium grey
+    const midHairMaterial = new THREE.MeshStandardMaterial({
+      color: 0x606060, // Medium grey
+      roughness: 0.9,
+      metalness: 0.05,
+    })
+    const midHairGeometry = new THREE.SphereGeometry(0.22, 32, 32, Math.PI / 2.5, Math.PI * 1.2, Math.PI / 3, Math.PI / 4.5)
+    const midHair = new THREE.Mesh(midHairGeometry, midHairMaterial)
+    midHair.position.set(0, 0.01, 0)
+    midHair.rotation.y = Math.PI / 2
+    group.add(midHair)
+
+    // Top layer - dark grey transitioning to black
+    const topHairMaterial = new THREE.MeshStandardMaterial({
+      color: 0x404040, // Dark grey
+      roughness: 0.9,
+      metalness: 0.05,
+    })
+    const topHairGeometry = new THREE.SphereGeometry(0.218, 32, 32, Math.PI / 2.5, Math.PI * 1.2, Math.PI / 5, Math.PI / 6)
+    const topHair = new THREE.Mesh(topHairGeometry, topHairMaterial)
+    topHair.position.set(0, 0.04, 0)
+    topHair.rotation.y = Math.PI / 2
+    group.add(topHair)
 
     group.position.y = 0.52
     return group
@@ -469,7 +508,7 @@ export class Claude implements ICharacter {
     hand.name = 'hand'
     group.add(hand)
 
-    group.position.set(side * 0.175, 0.3, 0)
+    group.position.set(side * 0.165, 0.3, 0)
     return group
   }
 
