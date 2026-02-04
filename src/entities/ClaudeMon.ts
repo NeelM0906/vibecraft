@@ -134,22 +134,6 @@ export class Claude implements ICharacter {
       transparent: true,
       opacity: 0.9,
     })
-    const visor = new THREE.Mesh(visorGeometry, visorMaterial)
-    visor.name = 'visor'
-    visor.position.set(0, 0.02, 0.19)
-    // group.add(visor)
-
-    // Visor frame/border (glowing edge)
-    const frameGeometry = new THREE.RingGeometry(0.17, 0.19, 32)
-    frameGeometry.scale(1, 0.6, 1)
-    const frameMaterial = new THREE.MeshBasicMaterial({
-      color: 0x67e8f9,
-      transparent: true,
-      opacity: 0.6,
-    })
-    const frame = new THREE.Mesh(frameGeometry, frameMaterial)
-    frame.position.set(0, 0.02, 0.191)
-    // group.add(frame)
 
     // LED Eyes - rounded rectangle shape (like LED displays)
     const eyeShape = new THREE.Shape()
@@ -348,6 +332,48 @@ export class Claude implements ICharacter {
     belt.rotation.x = Math.PI / 2
     belt.position.y = -0.06
     group.add(belt)
+
+    // Belt accessories - latch and pockets
+    const beltAccessoryMaterial = new THREE.MeshStandardMaterial({
+      color: 0xfbbf24, // Yellow-gold to match belt
+      roughness: 0.2,
+      metalness: 0.6,
+    })
+
+    // Center latch (small cube at front center)
+    const latchGeometry = new THREE.BoxGeometry(0.03, 0.03, 0.02)
+    const latch = new THREE.Mesh(latchGeometry, beltAccessoryMaterial.clone())
+    latch.position.set(0, -0.06, 0.13)
+    group.add(latch)
+
+    // Left pocket/compartment
+    const pocketGeometry = new THREE.BoxGeometry(0.04, 0.04, 0.025)
+    const leftPocket = new THREE.Mesh(pocketGeometry, beltAccessoryMaterial.clone())
+    leftPocket.position.set(-0.08, -0.06, 0.12)
+    group.add(leftPocket)
+
+    // Right pocket/compartment
+    const rightPocket = new THREE.Mesh(pocketGeometry, beltAccessoryMaterial.clone())
+    rightPocket.position.set(0.08, -0.06, 0.12)
+    group.add(rightPocket)
+
+    // Grey circular latches on pockets
+    const latchCircleMaterial = new THREE.MeshStandardMaterial({
+      color: 0x808080, // Grey
+      roughness: 0.3,
+      metalness: 0.6,
+    })
+
+    // Left pocket latch
+    const latchCircleGeometry = new THREE.CircleGeometry(0.01, 16)
+    const leftPocketLatch = new THREE.Mesh(latchCircleGeometry, latchCircleMaterial.clone())
+    leftPocketLatch.position.set(-0.08, -0.05, 0.145)
+    group.add(leftPocketLatch)
+
+    // Right pocket latch
+    const rightPocketLatch = new THREE.Mesh(latchCircleGeometry, latchCircleMaterial.clone())
+    rightPocketLatch.position.set(0.08, -0.05, 0.145)
+    group.add(rightPocketLatch)
 
     // Legs - stubby robot legs
     const legGeometry = new THREE.CylinderGeometry(0.04, 0.05, 0.15, 12)
