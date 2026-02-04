@@ -340,44 +340,69 @@ export class Claude implements ICharacter {
     group.add(bottomRightGlow)
 
     // Open front trenchcoat (split into top and bottom sections)
-    const coatMaterial = new THREE.MeshStandardMaterial({
+    // Outer material - black
+    const coatOuterMaterial = new THREE.MeshStandardMaterial({
       color: 0x000000, // Black
       roughness: 0.7,
       metalness: 0.1,
-      side: THREE.DoubleSide,
+      side: THREE.FrontSide,
     })
 
-    // Left coat - top section (1/3 height)
-    // Wider at top, narrower at split point
+    // Inner material - yellow-gold
+    const coatInnerMaterial = new THREE.MeshStandardMaterial({
+      color: 0xfbbf24, // Yellow-gold
+      roughness: 0.6,
+      metalness: 0.2,
+      side: THREE.BackSide,
+    })
+
+    // Left coat - top section outer (1/3 height) - BLACK
     const leftCoatTopGeometry = new THREE.CylinderGeometry(0.16, 0.13, 0.067, 16, 1, true, Math.PI * 0.2, Math.PI * 0.8)
-    const leftCoatTop = new THREE.Mesh(leftCoatTopGeometry, coatMaterial.clone())
-    leftCoatTop.castShadow = true
-    leftCoatTop.position.y = 0.11
-    group.add(leftCoatTop)
+    const leftCoatTopOuter = new THREE.Mesh(leftCoatTopGeometry, coatOuterMaterial.clone())
+    leftCoatTopOuter.castShadow = true
+    leftCoatTopOuter.position.y = 0.11
+    group.add(leftCoatTopOuter)
 
-    // Left coat - bottom section (2/3 height)
-    // Narrower at split point, wider at bottom
+    // Left coat - top section inner (1/3 height) - YELLOW-GOLD
+    const leftCoatTopInner = new THREE.Mesh(leftCoatTopGeometry.clone(), coatInnerMaterial.clone())
+    leftCoatTopInner.position.y = 0.11
+    group.add(leftCoatTopInner)
+
+    // Left coat - bottom section outer (2/3 height) - BLACK
     const leftCoatBottomGeometry = new THREE.CylinderGeometry(0.13, 0.19, 0.233, 16, 1, true, Math.PI * 0.2, Math.PI * 0.8)
-    const leftCoatBottom = new THREE.Mesh(leftCoatBottomGeometry, coatMaterial.clone())
-    leftCoatBottom.castShadow = true
-    leftCoatBottom.position.y = -0.063
-    group.add(leftCoatBottom)
+    const leftCoatBottomOuter = new THREE.Mesh(leftCoatBottomGeometry, coatOuterMaterial.clone())
+    leftCoatBottomOuter.castShadow = true
+    leftCoatBottomOuter.position.y = -0.063
+    group.add(leftCoatBottomOuter)
 
-    // Right coat - top section (1/3 height)
-    // Wider at top, narrower at split point
+    // Left coat - bottom section inner (2/3 height) - YELLOW-GOLD
+    const leftCoatBottomInner = new THREE.Mesh(leftCoatBottomGeometry.clone(), coatInnerMaterial.clone())
+    leftCoatBottomInner.position.y = -0.063
+    group.add(leftCoatBottomInner)
+
+    // Right coat - top section outer (1/3 height) - BLACK
     const rightCoatTopGeometry = new THREE.CylinderGeometry(0.16, 0.13, 0.067, 16, 1, true, Math.PI, Math.PI * 0.8)
-    const rightCoatTop = new THREE.Mesh(rightCoatTopGeometry, coatMaterial.clone())
-    rightCoatTop.castShadow = true
-    rightCoatTop.position.y = 0.11
-    group.add(rightCoatTop)
+    const rightCoatTopOuter = new THREE.Mesh(rightCoatTopGeometry, coatOuterMaterial.clone())
+    rightCoatTopOuter.castShadow = true
+    rightCoatTopOuter.position.y = 0.11
+    group.add(rightCoatTopOuter)
 
-    // Right coat - bottom section (2/3 height)
-    // Narrower at split point, wider at bottom
+    // Right coat - top section inner (1/3 height) - YELLOW-GOLD
+    const rightCoatTopInner = new THREE.Mesh(rightCoatTopGeometry.clone(), coatInnerMaterial.clone())
+    rightCoatTopInner.position.y = 0.11
+    group.add(rightCoatTopInner)
+
+    // Right coat - bottom section outer (2/3 height) - BLACK
     const rightCoatBottomGeometry = new THREE.CylinderGeometry(0.13, 0.19, 0.233, 16, 1, true, Math.PI, Math.PI * 0.8)
-    const rightCoatBottom = new THREE.Mesh(rightCoatBottomGeometry, coatMaterial.clone())
-    rightCoatBottom.castShadow = true
-    rightCoatBottom.position.y = -0.063
-    group.add(rightCoatBottom)
+    const rightCoatBottomOuter = new THREE.Mesh(rightCoatBottomGeometry, coatOuterMaterial.clone())
+    rightCoatBottomOuter.castShadow = true
+    rightCoatBottomOuter.position.y = -0.063
+    group.add(rightCoatBottomOuter)
+
+    // Right coat - bottom section inner (2/3 height) - YELLOW-GOLD
+    const rightCoatBottomInner = new THREE.Mesh(rightCoatBottomGeometry.clone(), coatInnerMaterial.clone())
+    rightCoatBottomInner.position.y = -0.063
+    group.add(rightCoatBottomInner)
 
     // Yellow-gold lines on sides of body
     const bodyLineMaterial = new THREE.MeshBasicMaterial({
