@@ -339,6 +339,46 @@ export class Claude implements ICharacter {
     bottomRightGlow.position.set(0, 0.02, 0.131)
     group.add(bottomRightGlow)
 
+    // Open front trenchcoat (split into top and bottom sections)
+    const coatMaterial = new THREE.MeshStandardMaterial({
+      color: 0x000000, // Black
+      roughness: 0.7,
+      metalness: 0.1,
+      side: THREE.DoubleSide,
+    })
+
+    // Left coat - top section (1/3 height)
+    // Wider at top, narrower at split point
+    const leftCoatTopGeometry = new THREE.CylinderGeometry(0.16, 0.13, 0.067, 16, 1, true, Math.PI * 0.2, Math.PI * 0.8)
+    const leftCoatTop = new THREE.Mesh(leftCoatTopGeometry, coatMaterial.clone())
+    leftCoatTop.castShadow = true
+    leftCoatTop.position.y = 0.11
+    group.add(leftCoatTop)
+
+    // Left coat - bottom section (2/3 height)
+    // Narrower at split point, wider at bottom
+    const leftCoatBottomGeometry = new THREE.CylinderGeometry(0.13, 0.19, 0.233, 16, 1, true, Math.PI * 0.2, Math.PI * 0.8)
+    const leftCoatBottom = new THREE.Mesh(leftCoatBottomGeometry, coatMaterial.clone())
+    leftCoatBottom.castShadow = true
+    leftCoatBottom.position.y = -0.063
+    group.add(leftCoatBottom)
+
+    // Right coat - top section (1/3 height)
+    // Wider at top, narrower at split point
+    const rightCoatTopGeometry = new THREE.CylinderGeometry(0.16, 0.13, 0.067, 16, 1, true, Math.PI, Math.PI * 0.8)
+    const rightCoatTop = new THREE.Mesh(rightCoatTopGeometry, coatMaterial.clone())
+    rightCoatTop.castShadow = true
+    rightCoatTop.position.y = 0.11
+    group.add(rightCoatTop)
+
+    // Right coat - bottom section (2/3 height)
+    // Narrower at split point, wider at bottom
+    const rightCoatBottomGeometry = new THREE.CylinderGeometry(0.13, 0.19, 0.233, 16, 1, true, Math.PI, Math.PI * 0.8)
+    const rightCoatBottom = new THREE.Mesh(rightCoatBottomGeometry, coatMaterial.clone())
+    rightCoatBottom.castShadow = true
+    rightCoatBottom.position.y = -0.063
+    group.add(rightCoatBottom)
+
     // Yellow-gold lines on sides of body
     const bodyLineMaterial = new THREE.MeshBasicMaterial({
       color: 0xfbbf24, // Yellow-gold
@@ -508,7 +548,7 @@ export class Claude implements ICharacter {
     hand.name = 'hand'
     group.add(hand)
 
-    group.position.set(side * 0.165, 0.3, 0)
+    group.position.set(side * 0.17, 0.3, 0)
     return group
   }
 
