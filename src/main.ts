@@ -2781,16 +2781,24 @@ function init() {
 
   // Handle token updates
   state.client.onTokens((data) => {
+    console.log('🔢 Token update received:', data)
     // Update feed panel stat
     const tokensEl = document.getElementById('stat-tokens')
     if (tokensEl) {
       tokensEl.textContent = data.cumulative.toLocaleString()
+      console.log('📊 Updated stat-tokens element')
+    } else {
+      console.warn('⚠️  stat-tokens element not found')
     }
     // Update top-left HUD with formatted display
     const tokenCounter = document.getElementById('token-counter')
     if (tokenCounter) {
-      tokenCounter.textContent = `⚡ ${formatTokens(data.cumulative)}`
+      const formatted = formatTokens(data.cumulative)
+      tokenCounter.textContent = `⚡ ${formatted}`
       tokenCounter.title = `${data.cumulative.toLocaleString()} tokens used`
+      console.log(`✅ Updated token-counter to: ⚡ ${formatted}`)
+    } else {
+      console.warn('⚠️  token-counter element not found')
     }
   })
 
@@ -3169,3 +3177,16 @@ window.addEventListener('beforeunload', cleanup)
 
 // Export for debugging
 ;(window as unknown as { vibecraft: AppState }).vibecraft = state
+
+// Add debug helper to manually test token counter
+;(window as any).testTokenCounter = (count: number) => {
+  console.log('🧪 Testing token counter with value:', count)
+  const tokenCounter = document.getElementById('token-counter')
+  if (tokenCounter) {
+    tokenCounter.textContent = `⚡ ${formatTokens(count)}`
+    tokenCounter.title = `${count.toLocaleString()} tokens used`
+    console.log('✅ Token counter updated successfully')
+  } else {
+    console.error('❌ token-counter element not found!')
+  }
+}

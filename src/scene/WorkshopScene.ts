@@ -62,6 +62,8 @@ export interface Zone {
   //   - Claude position: updated via onZoneElevation callback in main.ts
   //   - Click pulses: manually add elevation in main.ts click handler
   elevation: number
+  // Track if user has manually modified this zone's elevation
+  userModifiedElevation: boolean
   // Vertical edge lines (shown when elevated)
   edgeLines?: THREE.LineSegments
   // Solid side faces (shown when elevated)
@@ -567,11 +569,18 @@ export class WorkshopScene {
     sideMesh.position.copy(position)
 
     // Determine initial elevation
+    // Check if this zone has a pending elevation from localStorage (user-modified previously)
+    const pendingElevation = this.pendingZoneElevations.get(sessionId)
+    const hasPendingElevation = pendingElevation !== undefined
+
     // Check if this is the first zone and if "elevate first zone" setting is enabled
     const isFirstZone = this.zones.size === 0
     const shouldElevateFirst = typeof localStorage !== 'undefined' &&
       localStorage.getItem('vibecraft-elevate-first-zone') === 'true'
-    const initialElevation = (isFirstZone && shouldElevateFirst) ? 3 : 0
+
+    // Use pending elevation if available (user modified), otherwise apply auto-elevation for first zone
+    const initialElevation = hasPendingElevation ? pendingElevation :
+      (isFirstZone && shouldElevateFirst) ? 3 : 1
 
     const zone: Zone = {
       id: sessionId,
@@ -595,6 +604,10 @@ export class WorkshopScene {
       animationProgress: 0,
       // Elevation from painting (or initial elevation for first zone)
       elevation: initialElevation,
+      // Track if user has modified this zone's elevation
+      // True if we loaded from pending elevation (user modified previously)
+      // False if this is an auto-elevated first zone or default
+      userModifiedElevation: hasPendingElevation,
       edgeLines,
       sideMesh,
     }
@@ -640,10 +653,8 @@ export class WorkshopScene {
       this.focusZone(sessionId)
     }
 
-    // Apply pending elevation if one was loaded from localStorage
-    const pendingElevation = this.pendingZoneElevations.get(sessionId)
-    if (pendingElevation !== undefined) {
-      this.setZoneElevation(sessionId, pendingElevation + 5)
+    // Clean up pending elevation since we already applied it during zone creation
+    if (hasPendingElevation) {
       this.pendingZoneElevations.delete(sessionId)
     }
 
@@ -829,6 +840,8 @@ export class WorkshopScene {
         requestAnimationFrame(animate)
       } else {
         zone.elevation = newElevation
+        // Mark as user-modified
+        zone.userModifiedElevation = true
         // Update edge lines and side mesh to final position
         this.updateZoneEdgeLines(zone)
         this.updateZoneSideMesh(zone)
@@ -886,6 +899,8 @@ export class WorkshopScene {
         requestAnimationFrame(animate)
       } else {
         zone.elevation = newElevation
+        // Mark as user-modified
+        zone.userModifiedElevation = true
         // Update edge lines and side mesh to final position
         this.updateZoneEdgeLines(zone)
         this.updateZoneSideMesh(zone)
@@ -2123,14 +2138,14 @@ export class WorkshopScene {
       color: number
     }> = [
       { type: 'center', position: [0, 0, 0], label: 'Center', color: zoneColor },
-      { type: 'bookshelf', position: [0, 0, -4], label: 'Library', color: 0x2a4a5a },      // Dark teal
-      { type: 'desk', position: [4, 0, 0], label: 'Desk', color: 0x3a4a5a },              // Blue-gray
-      { type: 'workbench', position: [-4, 0, 0], label: 'Workbench', color: 0x3a4a55 },   // Steel blue
-      { type: 'terminal', position: [0, 0, 4], label: 'Terminal', color: 0x1a2a3a },      // Dark blue
-      { type: 'scanner', position: [3, 0, -3], label: 'Scanner', color: 0x2a4a6a },       // Blue
-      { type: 'antenna', position: [-3, 0, -3], label: 'Antenna', color: 0x3a5a6a },      // Teal
-      { type: 'portal', position: [-3, 0, 3], label: 'Portal', color: 0x3a4a6a },         // Deep blue
-      { type: 'taskboard', position: [3, 0, 3], label: 'Task Board', color: 0x3a4a5a },   // Blue-gray
+      { type: 'bookshelf', position: [0, 0, -4], label: 'Library', color: 0x3a2a5a },     // Dark purple
+      { type: 'desk', position: [4, 0, 0], label: 'Desk', color: 0x4a3a6a },              // Muted violet
+      { type: 'workbench', position: [-4, 0, 0], label: 'Workbench', color: 0x453a6a },   // Indigo steel
+      { type: 'terminal', position: [0, 0, 4], label: 'Terminal', color: 0x2a1a3a },      // Very dark indigo
+      { type: 'scanner', position: [3, 0, -3], label: 'Scanner', color: 0x4a2a6a },       // Rich purple
+      { type: 'antenna', position: [-3, 0, -3], label: 'Antenna', color: 0x5a3a7a },      // Soft violet
+      { type: 'portal', position: [-3, 0, 3], label: 'Portal', color: 0x4a2a7a },         // Deep magical purple
+      { type: 'taskboard', position: [3, 0, 3], label: 'Task Board', color: 0x4a3a6a },   // Purple-gray
     ]
 
     for (const config of stationConfigs) {
@@ -3353,6 +3368,7 @@ export class WorkshopScene {
     if (!zone) return
 
     zone.elevation = elevation
+    zone.userModifiedElevation = true  // Mark as user-modified since this is from saved state
     zone.group.position.y = elevation
     this.updateZoneEdgeLines(zone)
     this.updateZoneSideMesh(zone)

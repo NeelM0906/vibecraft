@@ -167,6 +167,8 @@ export class EventClient {
 
       case 'tokens':
         this.log('Tokens:', message.payload)
+        console.log('📨 [EventClient] Received tokens message:', message.payload)
+        console.log('📨 [EventClient] Number of token handlers:', this.tokensHandlers.size)
         this.notifyTokensHandlers(message.payload)
         break
 

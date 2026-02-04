@@ -444,6 +444,7 @@ function pollTokens(tmuxSession: string): void {
       session.lastUpdate = Date.now()
 
       debug(`Tokens updated: ${tokens} (cumulative: ${session.cumulative})`)
+      console.log(`📤 [Server] Broadcasting tokens: current=${tokens}, cumulative=${session.cumulative}, session=${tmuxSession}`)
 
       // Broadcast token update
       broadcast({

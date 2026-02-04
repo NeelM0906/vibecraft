@@ -59,6 +59,7 @@
 .hud-header img {
   width: 120px;
   height: auto;
+  display: block;
   opacity: 1;
   transition: opacity 0.2s ease;
   flex-shrink: 0;
@@ -158,6 +159,11 @@
   background: #fbbf24;
   box-shadow: 0 0 8px #fbbf24;
   animation: pulse 1s infinite;
+}
+
+#status-dot.disconnected {
+  background: #de4a4a;
+  box-shadow: 0 0 8px #de4a4a;
 }
 
 /* HUD button */
