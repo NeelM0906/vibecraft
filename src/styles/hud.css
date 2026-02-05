@@ -3,7 +3,7 @@
 /* Scene overlay elements */
 #scene-hud {
   position: fixed;
-  top: 50px;
+  top: 42px;
   left: 0;
   width: 60%;
   height: 48px;
