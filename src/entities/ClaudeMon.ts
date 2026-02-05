@@ -244,17 +244,19 @@ export class Claude implements ICharacter {
     })
 
     // Main hair cap - hemisphere on top of head
-    const hairCapGeometry = new THREE.SphereGeometry(0.22, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2)
+    const hairCapGeometry = new THREE.SphereGeometry(0.22, 32, 16, 0, Math.PI * 2, 0, 2 * Math.PI / 5)
     const hairCap = new THREE.Mesh(hairCapGeometry, hairMaterial)
-    hairCap.position.set(0, 0.1, 0)
+    hairCap.position.set(0, 0.05, 0)
     group.add(hairCap)
 
     // Front hair tuft - slight protrusion at front
-    const frontHairGeometry = new THREE.SphereGeometry(0.08, 16, 16)
-    frontHairGeometry.scale(1, 0.8, 1.2)
-    const frontHair = new THREE.Mesh(frontHairGeometry, hairMaterial.clone())
-    frontHair.position.set(0, 0.12, 0.18)
-    group.add(frontHair)
+    // const frontHairGeometry = new THREE.SphereGeometry(0.04, 16, 16)
+    // frontHairGeometry.scale(2, 0.8, 2.5)
+    // const frontHair = new THREE.Mesh(frontHairGeometry, hairMaterial.clone())
+    // frontHair.position.set(-0.1, 0.18, 0.16)
+    // frontHair.rotateX(Math.PI / 3)
+    // frontHair.rotateZ(Math.PI / 6)
+    // group.add(frontHair)
 
     // Buzzed grey hair on back and sides of head with gradient effect
     // Create gradient by layering multiple hair sections from grey (bottom) to black (top)
@@ -264,10 +266,11 @@ export class Claude implements ICharacter {
       color: 0x808080, // Light grey
       roughness: 0.9,
       metalness: 0.05,
+      side: THREE.DoubleSide,
     })
     const bottomHairGeometry = new THREE.SphereGeometry(0.222, 32, 32, Math.PI / 2.5, Math.PI * 1.2, Math.PI / 2.2, Math.PI / 6)
     const bottomHair = new THREE.Mesh(bottomHairGeometry, bottomHairMaterial)
-    bottomHair.position.set(0, -0.02, 0)
+    bottomHair.position.set(0, -0.01, 0)
     bottomHair.rotation.y = Math.PI / 2
     group.add(bottomHair)
 
@@ -276,8 +279,9 @@ export class Claude implements ICharacter {
       color: 0x606060, // Medium grey
       roughness: 0.9,
       metalness: 0.05,
+      side: THREE.DoubleSide,
     })
-    const midHairGeometry = new THREE.SphereGeometry(0.22, 32, 32, Math.PI / 2.5, Math.PI * 1.2, Math.PI / 3, Math.PI / 4.5)
+    const midHairGeometry = new THREE.SphereGeometry(0.222, 32, 32, Math.PI / 2.5, Math.PI * 1.2, Math.PI / 3, Math.PI / 4.5)
     const midHair = new THREE.Mesh(midHairGeometry, midHairMaterial)
     midHair.position.set(0, 0.01, 0)
     midHair.rotation.y = Math.PI / 2
@@ -288,10 +292,11 @@ export class Claude implements ICharacter {
       color: 0x404040, // Dark grey
       roughness: 0.9,
       metalness: 0.05,
+      side: THREE.DoubleSide,
     })
-    const topHairGeometry = new THREE.SphereGeometry(0.218, 32, 32, Math.PI / 2.5, Math.PI * 1.2, Math.PI / 5, Math.PI / 6)
+    const topHairGeometry = new THREE.SphereGeometry(0.222, 32, 32, Math.PI / 2.5, Math.PI * 1.2, Math.PI / 5, Math.PI / 6)
     const topHair = new THREE.Mesh(topHairGeometry, topHairMaterial)
-    topHair.position.set(0, 0.04, 0)
+    topHair.position.set(0, 0.02, 0)
     topHair.rotation.y = Math.PI / 2
     group.add(topHair)
 
@@ -392,15 +397,15 @@ export class Claude implements ICharacter {
     })
 
     // Left coat - top section outer (1/3 height) - BLACK
-    const leftCoatTopGeometry = new THREE.CylinderGeometry(0.16, 0.13, 0.067, 16, 1, true, Math.PI * 0.2, Math.PI * 0.8)
+    const leftCoatTopGeometry = new THREE.CylinderGeometry(0.16, 0.13, 0.097, 16, 1, true, Math.PI * 0.2, Math.PI * 0.8)
     const leftCoatTopOuter = new THREE.Mesh(leftCoatTopGeometry, coatOuterMaterial.clone())
     leftCoatTopOuter.castShadow = true
-    leftCoatTopOuter.position.y = 0.11
+    leftCoatTopOuter.position.y = 0.095
     group.add(leftCoatTopOuter)
 
     // Left coat - top section inner (1/3 height) - YELLOW-GOLD
     const leftCoatTopInner = new THREE.Mesh(leftCoatTopGeometry.clone(), coatInnerMaterial.clone())
-    leftCoatTopInner.position.y = 0.11
+    leftCoatTopInner.position.y = 0.095
     group.add(leftCoatTopInner)
 
     // Left coat - bottom section outer (2/3 height) - BLACK
@@ -416,15 +421,15 @@ export class Claude implements ICharacter {
     group.add(leftCoatBottomInner)
 
     // Right coat - top section outer (1/3 height) - BLACK
-    const rightCoatTopGeometry = new THREE.CylinderGeometry(0.16, 0.13, 0.067, 16, 1, true, Math.PI, Math.PI * 0.8)
+    const rightCoatTopGeometry = new THREE.CylinderGeometry(0.16, 0.13, 0.097, 16, 1, true, Math.PI, Math.PI * 0.8)
     const rightCoatTopOuter = new THREE.Mesh(rightCoatTopGeometry, coatOuterMaterial.clone())
     rightCoatTopOuter.castShadow = true
-    rightCoatTopOuter.position.y = 0.11
+    rightCoatTopOuter.position.y = 0.095
     group.add(rightCoatTopOuter)
 
     // Right coat - top section inner (1/3 height) - YELLOW-GOLD
     const rightCoatTopInner = new THREE.Mesh(rightCoatTopGeometry.clone(), coatInnerMaterial.clone())
-    rightCoatTopInner.position.y = 0.11
+    rightCoatTopInner.position.y = 0.095
     group.add(rightCoatTopInner)
 
     // Right coat - bottom section outer (2/3 height) - BLACK
@@ -449,7 +454,7 @@ export class Claude implements ICharacter {
     // Left side body line
     const leftBodyLineGeometry = new THREE.PlaneGeometry(0.015, 0.3)
     const leftBodyLine = new THREE.Mesh(leftBodyLineGeometry, bodyLineMaterial.clone())
-    leftBodyLine.position.set(-0.125, 0, 0)
+    leftBodyLine.position.set(-0.122, 0, 0)
     leftBodyLine.rotation.y = -Math.PI / 2
     group.add(leftBodyLine)
 
