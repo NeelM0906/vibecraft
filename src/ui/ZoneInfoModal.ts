@@ -21,6 +21,11 @@ export interface ZoneInfoData {
     filesTouched: Set<string>
     activeSubagents: number
   }
+  /** Task completion statistics */
+  taskStats?: {
+    tasksCompleted: number
+    recentCompletions: number
+  }
 }
 
 // ============================================================================
@@ -168,6 +173,23 @@ function renderContent(data: ZoneInfoData): void {
         </div>
       </div>
     </div>
+
+    <!-- Task Completion Stats -->
+    ${data.taskStats ? `
+    <div class="zone-info-section">
+      <div class="zone-info-section-title">Task Completions</div>
+      <div class="zone-info-stats-grid">
+        <div class="zone-info-stat">
+          <div class="zone-info-stat-value zone-info-stat-value--success">${data.taskStats.tasksCompleted}</div>
+          <div class="zone-info-stat-label">Total Completed</div>
+        </div>
+        <div class="zone-info-stat">
+          <div class="zone-info-stat-value zone-info-stat-value--highlight">${data.taskStats.recentCompletions}</div>
+          <div class="zone-info-stat-label">Last Hour</div>
+        </div>
+      </div>
+    </div>
+    ` : ''}
 
     <!-- Tokens -->
     ${s.tokens ? `

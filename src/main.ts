@@ -853,9 +853,13 @@ function showZoneInfo(sessionId: string): void {
   const sessionState = state.sessions.get(sessionId)
   const stats = sessionState?.stats
 
+  // Get task statistics from the scene
+  const taskStats = state.scene?.getTaskStatistics(sessionId)
+
   showZoneInfoModal({
     managedSession: managed,
     stats,
+    taskStats: taskStats || undefined,
   })
 }
 

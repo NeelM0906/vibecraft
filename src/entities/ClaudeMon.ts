@@ -1030,6 +1030,26 @@ export class Claude implements ICharacter {
     return this.idleBehaviorManager.forcePlayRandom(this.getCharacterParts())
   }
 
+  /** Play a celebration animation (for task completions, successes, etc.) */
+  playCelebration(): void {
+    // Store current state to restore after celebration
+    const previousState = this.state
+    const previousStation = this.currentStation
+
+    // Play victory dance
+    this.playIdleBehavior('victoryDance')
+
+    // After victory dance completes (2.5 seconds), restore previous state
+    setTimeout(() => {
+      if (previousState !== 'idle') {
+        this.setState(previousState)
+        if (previousState === 'working') {
+          this.currentStation = previousStation
+        }
+      }
+    }, 2500) // Victory dance duration
+  }
+
   /** Get list of station working behavior names (for dev UI) */
   getWorkingBehaviorStations(): string[] {
     return Object.keys(STATION_ANIMATIONS)

@@ -46,6 +46,7 @@ export interface Zone {
   position: THREE.Vector3
   label?: THREE.Sprite
   gitLabel?: THREE.Sprite  // Git status display on floor
+  taskBadge?: THREE.Sprite  // Task completion count badge
   pulseIntensity: number // For activity pulse effect
   attentionReason: AttentionReason // Persistent attention state
   attentionTime: number // Time accumulator for attention pulse
@@ -55,6 +56,15 @@ export interface Zone {
   // Animation state for enter/exit transitions
   animationState?: 'entering' | 'exiting'
   animationProgress?: number // 0 to 1
+  // Task completion statistics
+  statistics: {
+    tasksCompleted: number // Total tasks marked as completed
+    taskCompletionHistory: Array<{
+      timestamp: number
+      taskCount: number // Number of tasks completed in this update
+    }>
+    lastTodoSnapshot: Array<{ content: string; status: string }> // Previous todo list state for delta tracking
+  }
   // Elevation from painting hexes under the zone (raises the platform)
   // NOTE: zone.position.y is always 0. Components needing world Y must add elevation:
   //   - focusZone(): camera target includes elevation
@@ -552,6 +562,15 @@ export class WorkshopScene {
     gitLabel.visible = false  // Hidden until we have git data
     group.add(gitLabel)
 
+    // Create task completion badge
+    const taskBadge = this.createTaskBadge()
+    taskBadge.position.set(0, 5, 0)  // Above zone label
+    taskBadge.visible = false  // Hidden until tasks are completed
+    taskBadge.scale.setScalar(0.5)
+
+
+    group.add(taskBadge)
+
     // Create particle system for activity effects
     const { particles, velocities } = this.createParticleSystem(zoneColor)
     group.add(particles)
@@ -593,6 +612,7 @@ export class WorkshopScene {
       position,
       label,
       gitLabel,
+      taskBadge,
       pulseIntensity: 0,
       attentionReason: null,
       attentionTime: 0,
@@ -602,6 +622,12 @@ export class WorkshopScene {
       // Start animation
       animationState: 'entering',
       animationProgress: 0,
+      // Task completion statistics
+      statistics: {
+        tasksCompleted: 0,
+        taskCompletionHistory: [],
+        lastTodoSnapshot: [],
+      },
       // Elevation from painting (or initial elevation for first zone)
       elevation: initialElevation,
       // Track if user has modified this zone's elevation
@@ -1794,6 +1820,100 @@ export class WorkshopScene {
   }
 
   /**
+   * Create task completion badge sprite
+   */
+  private createTaskBadge(): THREE.Sprite {
+    const canvas = document.createElement('canvas')
+    const size = 64
+    canvas.width = size
+    canvas.height = size
+
+    const texture = new THREE.CanvasTexture(canvas)
+    texture.minFilter = THREE.LinearFilter
+    texture.magFilter = THREE.LinearFilter
+
+    const material = new THREE.SpriteMaterial({
+      map: texture,
+      transparent: true,
+      depthTest: false,
+      opacity: 0.95,
+    })
+
+    const sprite = new THREE.Sprite(material)
+    sprite.scale.set(1.2, 1.2, 1)
+
+    return sprite
+  }
+
+  /**
+   * Update task completion badge for a zone
+   */
+  updateTaskBadge(sessionId: string): void {
+    const zone = this.zones.get(sessionId)
+    if (!zone || !zone.taskBadge) return
+
+    const count = zone.statistics.tasksCompleted
+
+    // Hide badge if no tasks completed
+    if (count === 0) {
+      zone.taskBadge.visible = false
+      return
+    }
+
+    // Draw the badge
+    const canvas = document.createElement('canvas')
+    const ctx = canvas.getContext('2d')!
+    const size = 64
+    canvas.width = size
+    canvas.height = size
+
+    ctx.clearRect(0, 0, size, size)
+
+    // Draw circular badge background
+    ctx.fillStyle = '#4ade80'
+    ctx.beginPath()
+    ctx.arc(size / 2, size / 2, size / 2 - 2, 0, Math.PI * 2)
+    ctx.fill()
+
+    // Add shadow/glow
+    ctx.shadowColor = '#4ade80'
+    ctx.shadowBlur = 8
+    ctx.fill()
+
+    // Draw checkmark icon
+    ctx.strokeStyle = '#ffffff'
+    ctx.lineWidth = 4
+    ctx.lineCap = 'round'
+    ctx.lineJoin = 'round'
+    ctx.shadowBlur = 0
+
+    // Checkmark path
+    ctx.beginPath()
+    ctx.moveTo(size * 0.3, size * 0.5)
+    ctx.lineTo(size * 0.45, size * 0.65)
+    ctx.lineTo(size * 0.7, size * 0.35)
+    ctx.stroke()
+
+    // Draw count text
+    const text = count > 99 ? '99+' : count.toString()
+    ctx.font = 'bold 14px ui-sans-serif, system-ui, sans-serif'
+    ctx.fillStyle = '#ffffff'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'bottom'
+    ctx.fillText(text, size / 2, size - 2)
+
+    // Update texture
+    const material = zone.taskBadge.material as THREE.SpriteMaterial
+    const texture = new THREE.CanvasTexture(canvas)
+    texture.minFilter = THREE.LinearFilter
+    texture.magFilter = THREE.LinearFilter
+    material.map = texture
+    material.needsUpdate = true
+
+    zone.taskBadge.visible = true
+  }
+
+  /**
    * Update git status display for a zone
    */
   updateZoneGitStatus(
@@ -1870,6 +1990,52 @@ export class WorkshopScene {
     material.needsUpdate = true
 
     zone.gitLabel.visible = true
+  }
+
+  /**
+   * Update task completion statistics for a zone
+   */
+  updateTaskCompletions(sessionId: string, completedCount: number): void {
+    const zone = this.zones.get(sessionId)
+    if (!zone) return
+
+    // Update total count
+    zone.statistics.tasksCompleted += completedCount
+
+    // Add to history
+    zone.statistics.taskCompletionHistory.push({
+      timestamp: Date.now(),
+      taskCount: completedCount,
+    })
+
+    // Keep only last 100 entries to prevent memory growth
+    if (zone.statistics.taskCompletionHistory.length > 100) {
+      zone.statistics.taskCompletionHistory.shift()
+    }
+
+    // Update visual badge
+    this.updateTaskBadge(sessionId)
+
+    console.log(`Zone ${sessionId.slice(0, 8)}: ${completedCount} task(s) completed. Total: ${zone.statistics.tasksCompleted}`)
+  }
+
+  /**
+   * Get task completion statistics for a zone
+   */
+  getTaskStatistics(sessionId: string): { tasksCompleted: number; recentCompletions: number } | null {
+    const zone = this.zones.get(sessionId)
+    if (!zone) return null
+
+    // Count completions in the last hour
+    const oneHourAgo = Date.now() - (60 * 60 * 1000)
+    const recentCompletions = zone.statistics.taskCompletionHistory
+      .filter(entry => entry.timestamp > oneHourAgo)
+      .reduce((sum, entry) => sum + entry.taskCount, 0)
+
+    return {
+      tasksCompleted: zone.statistics.tasksCompleted,
+      recentCompletions,
+    }
   }
 
   /**
