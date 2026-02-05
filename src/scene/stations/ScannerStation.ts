@@ -24,6 +24,7 @@ export function addScannerDetails(group: THREE.Group): void {
     color: 0xc9a227,
     metalness: 0.7,
     roughness: 0.3,
+    side: THREE.DoubleSide,
   })
   const rim = new THREE.Mesh(
     new THREE.TorusGeometry(0.28, 0.04, 12, 24),
@@ -41,6 +42,7 @@ export function addScannerDetails(group: THREE.Group): void {
     opacity: 0.4,
     metalness: 0.1,
     roughness: 0.1,
+    side: THREE.DoubleSide,
   })
   const lens = new THREE.Mesh(
     new THREE.CircleGeometry(0.26, 24),
@@ -57,6 +59,7 @@ export function addScannerDetails(group: THREE.Group): void {
       color: 0xffffff,
       transparent: true,
       opacity: 0.6,
+      side: THREE.DoubleSide,
     })
   )
   glint.position.set(-0.12, 1.42, 0.02)

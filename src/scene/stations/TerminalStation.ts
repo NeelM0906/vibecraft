@@ -48,6 +48,45 @@ export function addTerminalDetails(group: THREE.Group): void {
     roughness: 0.7,
   })
   const keyboard = new THREE.Mesh(keyboardGeometry, keyboardMaterial)
-  keyboard.position.set(0, 0.83, 0.2)
+  keyboard.position.set(-0.1, 0.83, 0.2)
   group.add(keyboard)
+
+  // Mouse
+  // Mouse body (rounded shape)
+  const mouseBodyGeometry = new THREE.BoxGeometry(0.08, 0.04, 0.12)
+  const mouseBodyMaterial = new THREE.MeshStandardMaterial({
+    color: 0x2a2a35,
+    roughness: 0.6,
+  })
+  const mouseBody = new THREE.Mesh(mouseBodyGeometry, mouseBodyMaterial)
+  mouseBody.position.set(0.35, 0.85, 0.15)
+  group.add(mouseBody)
+
+  // Mouse buttons (two small boxes)
+  const mouseButtonGeometry = new THREE.BoxGeometry(0.035, 0.01, 0.05)
+  const mouseButtonMaterial = new THREE.MeshStandardMaterial({
+    color: 0x1a1a22,
+    roughness: 0.7,
+  })
+
+  // Left button
+  const leftButton = new THREE.Mesh(mouseButtonGeometry, mouseButtonMaterial)
+  leftButton.position.set(0.33, 0.87, 0.12)
+  group.add(leftButton)
+
+  // Right button
+  const rightButton = new THREE.Mesh(mouseButtonGeometry, mouseButtonMaterial)
+  rightButton.position.set(0.37, 0.87, 0.12)
+  group.add(rightButton)
+
+  // Scroll wheel (small cylinder)
+  const scrollWheelGeometry = new THREE.CylinderGeometry(0.008, 0.008, 0.03, 8)
+  const scrollWheelMaterial = new THREE.MeshStandardMaterial({
+    color: 0x444444,
+    roughness: 0.5,
+  })
+  const scrollWheel = new THREE.Mesh(scrollWheelGeometry, scrollWheelMaterial)
+  scrollWheel.position.set(0.35, 0.88, 0.135)
+  scrollWheel.rotation.x = Math.PI / 2
+  group.add(scrollWheel)
 }

@@ -90,6 +90,54 @@ export function addBookshelfDetails(group: THREE.Group): void {
     group.add(textMesh)
   }
 
+  for (let i = 4; i >= 0; i--) {
+    const book = new THREE.Mesh(
+      new THREE.BoxGeometry(0.15, 0.45, 0.5),
+      new THREE.MeshStandardMaterial({ color: bookColors[i] })
+    )
+    book.position.set(-0.4 + (4 - i) * 0.2, 1.05, 0)
+    group.add(book)
+
+    // Add text label on the book spine as a plane mesh (not sprite)
+    const canvas = document.createElement('canvas')
+    canvas.width = 128
+    canvas.height = 256
+    const ctx = canvas.getContext('2d')!
+
+    // Clear canvas
+    ctx.fillStyle = 'transparent'
+    ctx.fillRect(0, 0, canvas.width, canvas.height)
+
+    // Draw white text vertically
+    ctx.fillStyle = '#ffffff'
+    ctx.font = 'bold 42px Cinzel, serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+
+    // Rotate and draw text
+    ctx.save()
+    ctx.translate(canvas.width / 2, canvas.height / 2)
+    ctx.rotate(Math.PI / 2) // Rotate 90 degrees counter-clockwise for vertical text
+    ctx.fillText(bookLabels[i], 0, 0)
+    ctx.restore()
+
+    // Create texture from canvas
+    const texture = new THREE.CanvasTexture(canvas)
+    texture.needsUpdate = true
+
+    // Create a plane mesh for the text (stuck to book, not camera-facing)
+    const textGeometry = new THREE.PlaneGeometry(0.14, 0.34)
+    const textMaterial = new THREE.MeshBasicMaterial({
+      map: texture,
+      transparent: true,
+      side: THREE.DoubleSide,
+      depthTest: true,
+    })
+    const textMesh = new THREE.Mesh(textGeometry, textMaterial)
+    textMesh.position.set(-0.4 + i * 0.2, 1.05, 0.26) // Slightly in front of book
+    group.add(textMesh)
+  }
+
   // Helper function to create a book with text label
   const createBook = (color: number, label: string, position: THREE.Vector3, rotation?: THREE.Euler) => {
     const book = new THREE.Mesh(
