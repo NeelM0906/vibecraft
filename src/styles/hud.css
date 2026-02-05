@@ -47,12 +47,13 @@
 .hud-header {
   display: flex;
   align-items: flex-end;
-  gap: 14px;
+  gap: 20px;
   cursor: pointer;
 }
 
 /* 🔑 THIS IS THE ALIGNMENT FIX */
 #hud-header {
+  margin-left: auto;
   margin-right: auto;
 }
 

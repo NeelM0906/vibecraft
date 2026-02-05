@@ -42,24 +42,8 @@
 <div id="scene-hud">
   <div class="scene-badge unified-hud">
 
-    <!-- LEFT-ALIGNED HEADER -->
     <div id="hud-header"></div>
 
-    <!-- RIGHT-ALIGNED CONTENT -->
-    <div id="status-dot"></div>
-
-    <span id="username" class="hud-user">...</span>
-    <span id="status-text">online</span>
-
-    <span class="hud-sep">|</span>
-
-    <span id="token-counter" class="hud-tokens" title="Tokens used this session">
-      ⚡ 0 tok
-    </span>
-
-    <span class="hud-sep">|</span>
-
-    <button id="settings-btn" class="hud-btn" title="Settings">⚙️</button>
   </div>
 </div>
 
@@ -75,6 +59,7 @@
           An Actualized Intelligence Agent Building Tool
         </div>
       </div>
+      <img src="/UnblindedLogo.png" alt="Unblinded Logo" style="width: 120px; height: auto; max-width: 120px; display: block;" />
     </div>
   `;
 
@@ -141,9 +126,23 @@
       <!-- Right: Activity Feed -->
       <div id="feed-panel">
         <div id="feed-header">
-          <h2>Vibecraft <span class="muted">(vibecraft.sh)</span></h2>
-          <div class="feed-header-right">
+          <div id="feed-header-left">
+            <h2>Vibecraft <span class="muted">(vibecraft.sh)</span></h2>
             <span id="attention-badge" class="attention-badge hidden">0</span>
+          </div>
+          <div class="feed-header-right">
+
+            <!-- RIGHT-ALIGNED CONTENT (moved from scene-hud) -->
+            <div id="status-dot"></div>
+            <span id="username" class="hud-user">...</span>
+            <span id="status-text">online</span>
+            <span class="hud-sep">|</span>
+            <span id="token-counter" class="hud-tokens" title="Tokens used this session">
+              ⚡ 0 tok
+            </span>
+            <span class="hud-sep">|</span>
+            <button id="settings-btn" class="hud-btn" title="Settings">⚙️</button>
+            <span class="hud-sep">|</span>
             <button id="about-btn" class="feed-about-btn" title="About Vibecraft">?</button>
           </div>
         </div>
