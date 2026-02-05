@@ -265,7 +265,7 @@ export class WorkshopScene {
     this.controls.enableDamping = true
     this.controls.dampingFactor = 0.05
     this.controls.maxPolarAngle = Math.PI / 2.1
-    this.controls.minDistance = 5
+    this.controls.minDistance = 1
     this.controls.maxDistance = 150 // Extended for multi-zone overview
     this.controls.target.set(0, 0, 0)
 
