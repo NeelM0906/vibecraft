@@ -732,7 +732,7 @@ function setupManagedSessions(): void {
       // Check if this pending zone still exists (wasn't cleaned up)
       for (const [, pId] of pendingZonesToCleanup) {
         if (pId === pendingId) {
-          showZoneTimeoutModal()
+          // showZoneTimeoutModal() //showZoneTimeoutModal disabled
           break
         }
       }
